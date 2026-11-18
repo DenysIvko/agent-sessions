@@ -18,10 +18,12 @@ from PySide6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QLineEdit, QMe
 from app_config import DATA_DIR, VERSION
 from server import Handler, Snapshot, ThreadingHTTPServer
 from session_monitor import OUTCOMES, SessionMonitor, all_sessions
-from updates import RELEASE_URL, checker
+from updates import checker
 
 BASE = "http://127.0.0.1:4318"
 SOURCES = {"codex": "Codex", "claude": "Claude Code", "antigravity": "Antigravity"}
+POLL_STATUS = "Updates automatically every 3 seconds"
+RECONNECT_STATUS = "Dashboard reconnecting..."
 
 
 def icon():
@@ -106,7 +108,6 @@ class TrayWindow(QWidget):
         self.inflight = False
         self.pending_actions = set()
         self.update_info = None
-        self.last_notification = None
         self.setWindowTitle("Agent Sessions")
         self.resize(470, 610)
         self.setStyleSheet("""
@@ -145,13 +146,13 @@ class TrayWindow(QWidget):
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
         layout.addWidget(self.scroll)
-        self.footer = QLabel("Updates automatically every 3 seconds")
+        self.footer = QLabel(POLL_STATUS)
         self.footer.setWordWrap(True)
         layout.addWidget(self.footer)
         self.tray = QSystemTrayIcon(icon(), self)
         self.tray.setToolTip("Agent Sessions")
         self.tray.activated.connect(self.activated)
-        self.tray.messageClicked.connect(self.notification_clicked)
+        self.tray.messageClicked.connect(self.show_new)
         menu = QMenu()
         menu.addAction("Show Sessions", self.show_new)
         menu.addAction("Open Web Dashboard", lambda: QDesktopServices.openUrl(QUrl(BASE)))
@@ -160,7 +161,7 @@ class TrayWindow(QWidget):
         notifications.setChecked(self.settings.value("notifications", True, bool))
         notifications.toggled.connect(lambda enabled: self.settings.setValue("notifications", enabled))
         menu.addAction(notifications)
-        self.update_action = menu.addAction("Check for Updates", self.check_updates)
+        self.update_action = menu.addAction("Check for Updates", self.update_menu_clicked)
         menu.addAction(f"Version {VERSION}").setEnabled(False)
         menu.addSeparator()
         menu.addAction("Quit", app.quit)
@@ -201,15 +202,19 @@ class TrayWindow(QWidget):
     def received(self, data, error):
         self.inflight = False
         if error or not data or data.get("service") != "agent-sessions":
-            self.footer.setText("Dashboard reconnecting...")
+            self.footer.setText(RECONNECT_STATUS)
             return
+        if self.footer.text() in (RECONNECT_STATUS, self.snapshot.get("error")):
+            self.footer.setText(POLL_STATUS)
         self.snapshot = data
         finished = self.monitor.update(data)
         self.save_reviews()
+        scrollbar = self.scroll.verticalScrollBar()
+        position = scrollbar.value()
         self.render()
+        scrollbar.setValue(position)
         if self.settings.value("notifications", True, bool):
             for session in finished:
-                self.last_notification = session
                 self.tray.showMessage(f"{SOURCES[session['source']]} {OUTCOMES[session['status']]}",
                                       f"{session['project']}\n{session['title']}", QSystemTrayIcon.MessageIcon.Information, 6000)
 
@@ -296,23 +301,22 @@ class TrayWindow(QWidget):
         self.save_reviews()
         self.render()
 
-    def notification_clicked(self):
-        if self.last_notification and 'downloadURL' in self.last_notification:
-            QDesktopServices.openUrl(QUrl(self.last_notification['downloadURL']))
-        elif self.last_notification:
-            self.open_session(self.last_notification)
+    def update_menu_clicked(self):
+        if self.update_info:
+            QDesktopServices.openUrl(QUrl(self.update_info['downloadURL']))
+        else:
+            self.check_updates()
 
     def check_updates(self):
         if self.update_info:
-            QDesktopServices.openUrl(QUrl(self.update_info['downloadURL']))
             return
         def done(data, error):
             if data and data.get('available'):
                 self.update_info = data
                 self.update_action.setText(f"Download Update {data['version']}")
                 if self.settings.value('notifiedVersion') != data['version']:
-                    self.last_notification = data
-                    self.tray.showMessage("Agent Sessions update available", f"Version {data['version']} is ready. Click to download.")
+                    self.tray.showMessage("Agent Sessions update available",
+                                          f"Version {data['version']} is ready. Open the tray menu to download.")
                     self.settings.setValue('notifiedVersion', data['version'])
         QThreadPool.globalInstance().start(Task(checker.check, done))
 
