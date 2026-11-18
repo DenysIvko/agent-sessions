@@ -5,6 +5,9 @@ on:
   push:
     branches: [main]
   workflow_call:
+    secrets:
+      POSTHOG_PROJECT_KEY:
+        required: false
 
 permissions:
   contents: read
@@ -41,12 +44,18 @@ jobs:
         run: node --test test_colors.mjs test_sessions.mjs
       - name: Build Mac installer and verify native UI logic
         if: runner.os == 'macOS'
+        env:
+          POSTHOG_PROJECT_KEY: ${{ secrets.POSTHOG_PROJECT_KEY }}
+          POSTHOG_HOST: ${{ vars.POSTHOG_HOST }}
         run: python scripts/package_macos.py
       - name: Smoke test bundled Mac runtime
         if: runner.os == 'macOS'
         run: python scripts/check_macos_package.py
       - name: Build Windows executable
         if: runner.os == 'Windows'
+        env:
+          POSTHOG_PROJECT_KEY: ${{ secrets.POSTHOG_PROJECT_KEY }}
+          POSTHOG_HOST: ${{ vars.POSTHOG_HOST }}
         run: python scripts/package_windows.py
       - name: Verify Windows UI
         if: runner.os == 'Windows'

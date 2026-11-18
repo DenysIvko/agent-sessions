@@ -1,3 +1,4 @@
 psutil==7.2.2
 tzlocal==5.4.5
 tzdata==2026.2
+posthog==8.0.1

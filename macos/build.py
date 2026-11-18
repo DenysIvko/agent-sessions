@@ -25,6 +25,7 @@ def main():
     parser.add_argument("--bundle-backend", action="store_true", help="Include Python and all runtime dependencies")
     args = parser.parse_args()
     BUILD.mkdir(exist_ok=True)
+    run(sys.executable, ROOT / "scripts/configure_analytics.py")
     native = ROOT / "macos"
     common = ["xcrun", "swiftc", "-swift-version", "5", "-target", f"{platform.machine()}-apple-macosx13.0",
               "-module-cache-path", BUILD / "ModuleCache"]
@@ -46,13 +47,14 @@ def main():
     if dashboard.exists():
         shutil.rmtree(dashboard)
     dashboard.mkdir()
-    for file in ["server.py", "claude_sessions.py", "antigravity_sessions.py", "session_actions.py", "processes.py", "app_config.py", "updates.py", "demo.py", "VERSION"]:
+    for file in ["server.py", "claude_sessions.py", "antigravity_sessions.py", "session_actions.py", "processes.py", "app_config.py", "updates.py", "demo.py", "product_analytics.py", "analytics-config.json", "VERSION"]:
         shutil.copy2(ROOT / file, dashboard / file)
     shutil.copytree(ROOT / "public", dashboard / "public")
     if args.bundle_backend:
         run(sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--onedir", "--name", "agent-sessions-server",
             "--distpath", BUILD / "frozen", "--workpath", BUILD / "pyinstaller", "--specpath", BUILD,
             "--add-data", f"{ROOT / 'public'}:public", "--add-data", f"{ROOT / 'VERSION'}:.",
+            "--add-data", f"{ROOT / 'analytics-config.json'}:.",
             "--collect-data", "tzdata", ROOT / "server.py")
         if (resources / "backend").exists():
             shutil.rmtree(resources / "backend")

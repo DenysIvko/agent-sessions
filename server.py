@@ -21,6 +21,7 @@ from antigravity_sessions import read_sessions as read_antigravity_sessions
 from claude_sessions import ClaudeSessions
 from session_actions import archive_session
 from updates import checker as update_checker
+from product_analytics import Analytics
 
 ROOT = Path(__file__).resolve().parent
 CODEX = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex"))
@@ -322,7 +323,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if not self.allowed_request():
             return
-        if self.path not in ("/api/archive", "/api/favorite"):
+        if self.path not in ("/api/archive", "/api/favorite", "/api/analytics", "/api/analytics/preferences"):
             self.send_error(404)
             return
         # A custom header and JSON content type prevent cross-site form submissions.
@@ -335,7 +336,16 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("Invalid request size.")
             self.connection.settimeout(3)
             payload = json.loads(self.rfile.read(length))
-            if not isinstance(payload, dict) or not isinstance(payload.get("id"), str):
+            if not isinstance(payload, dict):
+                raise ValueError("A JSON object is required.")
+            if self.path == "/api/analytics/preferences":
+                self.send_json(200, self.server.analytics.set_enabled(payload.get("enabled")))
+                return
+            if self.path == "/api/analytics":
+                self.server.analytics.capture(payload.get("event"), payload.get("properties"))
+                self.send_json(200, {"ok": True})
+                return
+            if not isinstance(payload.get("id"), str):
                 raise ValueError("A session ID is required.")
             snapshot = self.server.snapshot
             if self.path == "/api/favorite":
@@ -362,14 +372,17 @@ class Handler(BaseHTTPRequestHandler):
         if not self.allowed_request():
             return
         path = urlsplit(self.path).path
+        if path == "/api/analytics":
+            self.send_json(200, self.server.analytics.status())
+            return
         if path == "/api/update":
             self.send_json(200, update_checker.check())
             return
         if path == "/api/sessions":
             with self.server.snapshot.lock:
-                body = json.dumps(self.server.snapshot.data).encode()
+                body = json.dumps({**self.server.snapshot.data, "analytics": self.server.analytics.status()}).encode()
             content_type = "application/json"
-        elif path in ("/", "/app.js", "/styles.css", "/favicon.svg", "/colors.mjs", "/sessions.mjs", "/tutorial.mjs",
+        elif path in ("/", "/app.js", "/styles.css", "/favicon.svg", "/colors.mjs", "/sessions.mjs", "/tutorial.mjs", "/analytics.mjs",
                       "/vendor/color-hash-2.0.2/color-hash.mjs"):
             file = ROOT / "public" / ("index.html" if path == "/" else path[1:])
             body = file.read_bytes()
@@ -398,6 +411,7 @@ def main():
     parser.add_argument("--demo", action="store_true", help="Show fictional screenshot data without reading source apps")
     args = parser.parse_args()
     server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
+    server.analytics = Analytics(demo=args.demo)
     if args.demo:
         from demo import snapshot
         server.snapshot = Snapshot()
@@ -419,6 +433,7 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
+        server.analytics.close()
         server.server_close()
 
 

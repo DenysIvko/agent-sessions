@@ -36,7 +36,7 @@
         <div class="csd-logo"><svg class="csd-icon" aria-hidden="true"><use href="#icon-code"/></svg></div>
         <div><h1 class="csd-title">Agent Sessions</h1><p id="today" class="csd-sub">Today's activity + saved favorites · archived hidden</p></div>
       </div>
-      <div class="csd-header-actions"><button id="help" type="button" class="csd-ghost" title="Replay the quick tour of the dashboard and tray">Help</button><div class="csd-live" aria-live="off" title="Session activity refreshes automatically every 3 seconds. No manual refresh is needed.">
+      <div class="csd-header-actions"><button id="privacy-open" type="button" class="csd-ghost" title="Control anonymous usage analytics for this device">Privacy</button><button id="help" type="button" class="csd-ghost" title="Replay the quick tour of the dashboard and tray">Help</button><div class="csd-live" aria-live="off" title="Session activity refreshes automatically every 3 seconds. No manual refresh is needed.">
         <svg class="csd-ring" width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="8" fill="none" stroke="#262A33" stroke-width="3"/><circle id="refresh-ring" cx="11" cy="11" r="8" fill="none" stroke-width="3" stroke-linecap="round"/></svg>
         <div class="csd-live-text"><span id="connection-label" class="csd-live-label is-error"><span class="csd-live-dot"></span><span id="connection">Connecting</span></span><span id="countdown" class="csd-live-sub">Auto-refresh every 3s</span></div>
       </div></div>
@@ -69,6 +69,7 @@
         <p>This dashboard shows sessions with activity today in your local timezone, plus saved favorites from earlier days. Archived sessions stay hidden.</p>
         <p>The live indicator and countdown show automatic refresh every 3 seconds. A warning means a source is unavailable; its last successful update stays visible.</p>
         <p>Browse this guide without changing any sessions. Close it at any time, then use <strong>Help</strong> to return.</p>
+        <p>Anonymous product usage is shared with PostHog by default. Session contents, titles, projects and paths stay on your device. Use <strong>Privacy</strong> in the dashboard or <strong>Usage Analytics</strong> in the tray menu to turn sharing off.</p>
       </section>
       <section data-tour-step hidden>
         <h3 tabindex="-1">Check progress</h3>
@@ -108,6 +109,16 @@
       </section>
     </div>
     <footer class="csd-tutorial-nav"><button id="tutorial-back" type="button" class="csd-ghost">Back</button><button id="tutorial-next" type="button" class="csd-ghost">Next</button></footer>
+  </dialog>
+  <dialog id="privacy" class="csd-tutorial" aria-labelledby="privacy-title">
+    <header class="csd-tutorial-header"><h2 id="privacy-title">Usage analytics</h2><button id="privacy-close" type="button" class="csd-ghost">Close</button></header>
+    <div class="csd-tutorial-body">
+      <p>Help improve Agent Sessions by sharing anonymous product events with PostHog. Sharing is on by default and uses a random installation ID.</p>
+      <p>Events describe features used, agent source, app version and operating system. We do not send session contents, titles, session IDs, project names, file paths, search text or credentials. No screen recording or automatic click capture is used.</p>
+      <label class="csd-analytics-toggle"><input id="analytics-enabled" type="checkbox" disabled> Share anonymous usage events</label>
+      <p id="analytics-status" role="status">Loading your preference...</p>
+      <p>This setting applies to the dashboard and tray on this device and survives restarts and updates. Turning it off discards queued events; an upload already in progress may finish. Previously sent events remain in PostHog.</p>
+    </div>
   </dialog>
   <div id="toast" class="csd-toast" role="status" hidden></div>
   <template id="tile-template"><button type="button" class="csd-tile" aria-pressed="false"><span class="csd-tile-top"><span class="csd-tile-icon"></span><span class="csd-tile-flag" hidden>Filtering</span></span><span class="csd-tile-count"><span class="csd-tile-num">0</span><span class="csd-tile-label"></span></span></button></template>

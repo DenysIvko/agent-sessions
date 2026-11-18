@@ -29,6 +29,18 @@ with tempfile.TemporaryDirectory() as directory:
         tour_action = next(a for a in view.tray.contextMenu().actions() if a.text() == 'Quick Tour')
         tour_action.trigger()
         assert open_url.call_count == 2
+        privacy_action = next(a for a in view.tray.contextMenu().actions() if a.text() == 'Usage Analytics...')
+        privacy_action.trigger()
+        assert open_url.call_args.args[0].toString().endswith('/?privacy=1')
+        assert not view.isVisible()
+    with patch.object(view, 'track') as track:
+        view.tabs.tabBarClicked.emit(2)
+        track.assert_called_once_with('view_selected', view='favorites')
+        track.reset_mock()
+        notifications = next(a for a in view.tray.contextMenu().actions() if a.text() == 'Completion notifications')
+        notifications.trigger()
+        track.assert_called_once_with('notifications_toggled', enabled=False)
+        notifications.trigger()
     for index, label in enumerate(['New', 'All', 'Favorites']):
         view.tabs.setCurrentIndex(index)
         assert view.tabs.tabText(index).startswith(label)

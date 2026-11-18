@@ -1,4 +1,5 @@
 import { identityColors } from './colors.mjs';
+import { track, updateAnalytics } from './analytics.mjs';
 import './tutorial.mjs';
 import { SOURCE_META, STATUS_META, dashboardSessions, projectGroup, sessionStatus, statusCounts, visibleSessions, formatDuration, runDuration } from './sessions.mjs';
 
@@ -301,6 +302,7 @@ async function refresh() {
     const response = await fetch('/api/sessions', { cache: 'no-store', signal: AbortSignal.timeout(5000) });
     if (!response.ok) throw new Error('Could not connect to the local dashboard.');
     data = await response.json();
+    updateAnalytics(data.analytics);
     render();
     setConnection(data.error ? 'Reconnecting' : 'Live', data.error || '');
     $('#updated').textContent = data.checkedAt ? `Updated ${new Date(data.checkedAt * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: data.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone })}` : 'Waiting for first update';
@@ -316,25 +318,30 @@ $('#tiles').addEventListener('click', event => {
   const button = event.target.closest('[data-filter]');
   if (!button) return;
   statusFilter = statusFilter === button.dataset.filter ? 'all' : button.dataset.filter;
+  track('filter_used', { filter: 'status' });
   render();
 });
 $('#sources').addEventListener('click', event => {
   const button = event.target.closest('[data-source]');
   if (!button) return;
   sourceFilter = sourceFilter === button.dataset.source ? '' : button.dataset.source;
+  track('filter_used', { filter: 'source' });
   render();
 });
 $('#favorites').addEventListener('click', () => {
   favoritesOnly = !favoritesOnly;
+  track('view_selected', { view: favoritesOnly ? 'favorites' : 'all' });
   render();
 });
 $('#projects').addEventListener('click', event => {
   const button = event.target.closest('[data-project]');
   if (!button) return;
   projectFilter = projectFilter === button.dataset.project ? '' : button.dataset.project;
+  track('filter_used', { filter: 'project' });
   render();
 });
 $('#clear-filters').addEventListener('click', () => {
+  track('filter_used', { filter: 'clear' });
   statusFilter = 'all';
   projectFilter = '';
   sourceFilter = '';
@@ -362,6 +369,7 @@ $('#board').addEventListener('click', async event => {
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Could not save this favorite.');
+      track('favorite_changed', { source: session.source, enabled: result.favorite });
       const updated = { ...session, favorite: result.favorite };
       data.sessions = data.sessions.map(s => s.id === session.id ? updated : s);
       data.favoriteSessions = (data.favoriteSessions || []).filter(s => s.id !== session.id);
@@ -392,6 +400,7 @@ $('#board').addEventListener('click', async event => {
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Could not archive this session.');
+      track('session_archived', { source: session.source });
       toast.textContent = result.message;
       await refresh();
     } catch (error) {
@@ -408,6 +417,7 @@ $('#board').addEventListener('click', async event => {
     return;
   }
   if (!event.target.closest('[data-open]')) return;
+  track('session_open_requested', { source: session.source, method: session.url ? 'link' : 'copy' });
   if (!session.url) {
     event.preventDefault();
     try {
@@ -431,9 +441,10 @@ $('#board').addEventListener('keydown', event => {
   }
 });
 $('#search').addEventListener('input', render);
-$('#kind').addEventListener('change', render);
+$('#search').addEventListener('change', () => { if ($('#search').value) track('filter_used', { filter: 'search' }); });
+$('#kind').addEventListener('change', () => { render(); track('filter_used', { filter: 'type' }); });
 document.addEventListener('keydown', event => {
-  if (event.key === '/' && !$('#tutorial').open && !['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
+  if (event.key === '/' && !document.querySelector('dialog[open]') && !['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
     event.preventDefault();
     $('#search').focus();
   }
@@ -447,3 +458,4 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) refr
 setInterval(() => { if (Date.now() >= nextRefresh) refresh(); }, 250);
 setInterval(updateCountdown, 250);
 refresh();
+track('dashboard_opened');

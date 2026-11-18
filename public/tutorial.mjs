@@ -1,3 +1,4 @@
+import { track } from './analytics.mjs';
 const dialog = document.querySelector('#tutorial');
 const steps = [...dialog.querySelectorAll('[data-tour-step]')];
 const back = document.querySelector('#tutorial-back');
@@ -5,6 +6,7 @@ const next = document.querySelector('#tutorial-next');
 const help = document.querySelector('#help');
 const storageKey = 'agent-sessions-tour-seen';
 let step = 0;
+let completed = false;
 
 function render() {
   steps.forEach((section, index) => { section.hidden = index !== step; });
@@ -16,7 +18,9 @@ function render() {
 
 function open() {
   step = 0;
+  completed = false;
   dialog.showModal();
+  track('tutorial_started');
   render();
 }
 
@@ -24,10 +28,11 @@ help.addEventListener('click', open);
 document.querySelector('#tutorial-close').addEventListener('click', () => dialog.close());
 back.addEventListener('click', () => { step--; render(); });
 next.addEventListener('click', () => {
-  if (step === steps.length - 1) dialog.close();
+  if (step === steps.length - 1) { completed = true; dialog.close(); }
   else { step++; render(); }
 });
 dialog.addEventListener('close', () => {
+  track(completed ? 'tutorial_completed' : 'tutorial_dismissed', completed ? {} : { step: step + 1 });
   try { localStorage.setItem(storageKey, '1'); } catch { /* The guide also works without browser storage. */ }
   help.focus();
 });
@@ -40,4 +45,4 @@ if (requested) {
 }
 let seen = false;
 try { seen = localStorage.getItem(storageKey) === '1'; } catch { /* Storage may be disabled. */ }
-if (requested || !seen) open();
+if (!url.searchParams.has('privacy') && (requested || !seen)) open();

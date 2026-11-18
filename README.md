@@ -109,8 +109,17 @@ The local HTTP server binds only to `127.0.0.1`. Mutations require a same-origin
 JSON request with a custom header. It exposes selected session metadata, not a
 transcript download API or arbitrary filesystem access. The Claude reader parses
 transcripts locally to determine activity and titles. Credential files are not read.
-There is no telemetry. Update checks contact only GitHub's public Releases API and
-send no session information. Downloading an update uses GitHub's asset hosting.
+From version 0.3.0, anonymous product analytics are **enabled by default** in configured
+releases. Turn them off using **Privacy** in the dashboard or **Usage Analytics** in
+the tray menu. One preference covers both interfaces on this device and survives updates.
+PostHog receives explicit feature-use events, source type, app version, operating system,
+and a random installation ID. Session contents, titles, session IDs, project names, paths,
+search text and credentials are excluded. There is no session recording or automatic
+interaction capture. Demo mode and builds without a project token send nothing.
+See the [event catalog and privacy details](docs/analytics.md).
+
+Update checks contact GitHub's public Releases API and send no session information.
+Downloading an update uses GitHub's asset hosting.
 See [data locations and troubleshooting](docs/troubleshooting.md).
 
 ## Updates and releases

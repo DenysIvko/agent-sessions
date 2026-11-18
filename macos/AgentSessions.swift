@@ -34,6 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var lastDeliveredTitle = ""
     private var updateInfo: [String: Any]?
     private var lastUpdateCheck = Date.distantPast
+    private var openedTracked = false
     private var notificationsEnabled: Bool {
         get { UserDefaults.standard.object(forKey: "completionNotifications") as? Bool ?? true }
         set { UserDefaults.standard.set(newValue, forKey: "completionNotifications") }
@@ -57,6 +58,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         popover.animates = false
         dashboard.onOpenWeb = { [weak self] in self?.openBrowser() }
         dashboard.onHelp = { [weak self] in self?.openTutorial() }
+        dashboard.onSelectView = { [weak self] view in self?.track("view_selected", ["view": view]) }
+        dashboard.onSearch = { [weak self] in self?.track("filter_used", ["filter": "search"]) }
         dashboard.onNotifications = { [weak self] button in
             DispatchQueue.main.async { self?.showMenu(anchor: button) }
         }
@@ -101,6 +104,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     @objc private func showDashboard() {
         guard let button = statusItem.button else { return }
+        track("tray_opened")
         dashboard.showNewSessions()
         let screen = button.window?.screen ?? NSScreen.main
         let available = screen?.visibleFrame.size ?? NSSize(width: 1200, height: 900)
@@ -119,6 +123,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         addItem("Show Sessions", action: #selector(showDashboard), to: menu)
         addItem("Open Web Dashboard", action: #selector(openBrowser), to: menu)
         addItem("Quick Tour", action: #selector(openTutorial), to: menu)
+        addItem("Usage Analytics...", action: #selector(openPrivacy), to: menu)
         menu.addItem(.separator())
         let enabled = addItem("Completion Notifications", action: #selector(toggleNotifications), to: menu)
         enabled.state = notificationsEnabled ? .on : .off
@@ -156,13 +161,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         popover.performClose(nil)
     }
 
+    @objc private func openPrivacy() {
+        NSWorkspace.shared.open(dashboardURL.appending(queryItems: [URLQueryItem(name: "privacy", value: "1")]))
+        popover.performClose(nil)
+    }
+
+    private func track(_ event: String, _ properties: [String: Any] = [:]) {
+        guard latestSnapshot?.analytics?.configured == true else { return }
+        var request = URLRequest(url: dashboardURL.appendingPathComponent("api/analytics"))
+        request.httpMethod = "POST"
+        request.timeoutInterval = 3
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("1", forHTTPHeaderField: "X-Session-Dashboard")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: ["event": event,
+            "properties": properties.merging(["surface": "tray"]) { _, value in value }])
+        network.dataTask(with: request).resume()
+    }
+
     private func openSession(_ session: AgentSession) {
         if let raw = session.url, let url = URL(string: raw), isSessionLink(url) {
+            track("session_open_requested", ["source": session.source, "method": "link"])
             if NSWorkspace.shared.open(url) {
                 markReviewed(session)
                 popover.performClose(nil)
             }
         } else if let command = session.resumeCommand {
+            track("session_open_requested", ["source": session.source, "method": "copy"])
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(command, forType: .string)
             dashboard.showFeedback("Resume command copied")
@@ -185,6 +209,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     @objc private func quit() { NSApp.terminate(nil) }
     @objc private func checkForUpdates() {
         if let raw = updateInfo?["downloadURL"] as? String, let url = URL(string: raw) {
+            track("update_download_requested")
             NSWorkspace.shared.open(url)
             return
         }
@@ -199,6 +224,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                   raw.hasPrefix("https://github.com/DenysIvko/agent-sessions/releases/download/v") else { return }
             DispatchQueue.main.async {
                 guard let self else { return }
+                if self.updateInfo == nil { self.track("update_available") }
                 self.updateInfo = info
                 self.dashboard.showFeedback("Update \(version) available in the tray menu")
                 if UserDefaults.standard.string(forKey: "notifiedVersion") != version {
@@ -207,6 +233,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                     content.body = "Version \(version) is ready. Click to download the installer."
                     content.userInfo["updateURL"] = raw
                     self.sendNotification(identifier: "update-\(version)", content: content)
+                    self.track("notification_requested", ["kind": "update"])
                     UserDefaults.standard.set(version, forKey: "notifiedVersion")
                 }
             }
@@ -226,6 +253,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 guard let self else { return }
                 self.savingFavorites.remove(session.id)
                 if (response as? HTTPURLResponse)?.statusCode == 200 {
+                    self.track("favorite_changed", ["source": session.source, "enabled": enabled])
                     self.dashboard.showFeedback(enabled ? "Saved to Favorites across all days" : "Removed from Favorites")
                 } else {
                     let reply = data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
@@ -252,6 +280,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 let message = reply?["message"] ?? reply?["error"] ?? error?.localizedDescription ?? "Could not save the local archive."
                 self.dashboard.showFeedback(message)
                 if (response as? HTTPURLResponse)?.statusCode == 200 {
+                    self.track("session_archived", ["source": session.source])
                     self.notifications.removeDeliveredNotifications(withIdentifiers: [session.completionID])
                 }
                 self.poll()
@@ -260,6 +289,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
     @objc private func toggleNotifications() {
         notificationsEnabled.toggle()
+        track("notifications_toggled", ["enabled": notificationsEnabled])
         if notificationsEnabled {
             notifications.requestAuthorization(options: [.alert, .sound]) { [weak self] _, _ in self?.updateNotificationState() }
         }
@@ -274,6 +304,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         content.body = "Completion alerts appear here. The tray stays closed."
         content.sound = .default
         sendNotification(identifier: "test-\(UUID().uuidString)", content: content)
+        track("notification_requested", ["kind": "test"])
     }
 
     private func updateNotificationState() {
@@ -315,6 +346,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     private func handle(_ snapshot: DashboardSnapshot) {
         latestSnapshot = snapshot
+        if !openedTracked { track("app_opened"); openedTracked = true }
         let running = snapshot.sessions.filter(\.running).count
         statusMessage = snapshot.error == nil ? "\(snapshot.sessions.count) sessions today - \(running) running" : "Some session data is unavailable"
         statusItem.button?.title = snapshot.error == nil ? (running > 0 ? " \(running)" : "") : " !"
@@ -334,6 +366,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 content.threadIdentifier = session.source
                 if let url = session.url { content.userInfo["sessionURL"] = url }
                 sendNotification(identifier: session.completionID, content: content)
+                track("notification_requested", ["kind": "completion"])
             }
         }
         writeStatus()
@@ -422,8 +455,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                                 withCompletionHandler completionHandler: @escaping () -> Void) {
         guard response.actionIdentifier == UNNotificationDefaultActionIdentifier else { completionHandler(); return }
         DispatchQueue.main.async {
+            self.track("notification_clicked")
             if let raw = response.notification.request.content.userInfo["updateURL"] as? String,
                raw.hasPrefix("https://github.com/DenysIvko/agent-sessions/releases/download/v"), let url = URL(string: raw) {
+                self.track("update_download_requested")
                 NSWorkspace.shared.open(url)
             } else if let raw = response.notification.request.content.userInfo["sessionURL"] as? String,
                let url = URL(string: raw), isSessionLink(url) {

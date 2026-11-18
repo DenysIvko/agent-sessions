@@ -9,7 +9,8 @@ import sys
 def collect(destination, windows=False):
     destination = Path(destination)
     destination.mkdir(parents=True, exist_ok=True)
-    for name in ['psutil', 'tzlocal', 'tzdata', 'pyinstaller']:
+    for name in ['psutil', 'tzlocal', 'tzdata', 'pyinstaller', 'posthog', 'requests', 'distro',
+                 'typing-extensions', 'charset-normalizer', 'idna', 'urllib3', 'certifi']:
         package = distribution(name)
         for file in package.files:
             if any(part.lower().startswith(('license', 'copying', 'copyright')) for part in file.parts):

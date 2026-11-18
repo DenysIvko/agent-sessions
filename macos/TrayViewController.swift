@@ -157,6 +157,8 @@ final class TrayViewController: NSViewController, NSTableViewDataSource, NSTable
     var onMarkReviewed: ((AgentSession) -> Void)?
     var onOpenWeb: (() -> Void)?
     var onHelp: (() -> Void)?
+    var onSelectView: ((String) -> Void)?
+    var onSearch: (() -> Void)?
     var onNotifications: ((NSButton) -> Void)?
     private let summary = NSTextField(labelWithString: "Connecting...")
     private let tabs = NSSegmentedControl(labels: ["New", "All", "Favorites"], trackingMode: .selectOne, target: nil, action: nil)
@@ -336,7 +338,11 @@ final class TrayViewController: NSViewController, NSTableViewDataSource, NSTable
         return cell
     }
     func controlTextDidChange(_ obj: Notification) { render() }
-    @objc private func tabChanged() { render() }
+    func controlTextDidEndEditing(_ obj: Notification) { if !search.stringValue.isEmpty { onSearch?() } }
+    @objc private func tabChanged() {
+        onSelectView?(["new", "all", "favorites"][tabs.selectedSegment])
+        render()
+    }
     @objc private func openWeb() { onOpenWeb?() }
     @objc private func openHelp() { onHelp?() }
     @objc private func notificationOptions() { onNotifications?(notificationsButton) }
