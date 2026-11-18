@@ -26,7 +26,7 @@ class ClaudeSessionsTest(unittest.TestCase):
     def transcript(self, number, rows):
         path = self.root / 'projects' / 'project' / f'{self.sid(number)}.jsonl'
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(''.join(json.dumps(row) + '\n' for row in rows))
+        path.write_text(''.join(json.dumps(row, ensure_ascii=False) + '\n' for row in rows), encoding='utf-8')
         return path
 
     def user(self, at, **extra):
@@ -64,7 +64,7 @@ class ClaudeSessionsTest(unittest.TestCase):
         self.assertIn(f'claude:{self.sid(3)}', desktop['relatedIds'])
 
     def test_today_is_real_activity_including_older_and_new_sessions(self):
-        self.transcript(1, [self.user(self.midnight - 10), self.assistant(self.now - 1)])
+        self.transcript(1, [self.user(self.midnight - 10, message={'content': 'Build caf\u00e9 dashboard'}), self.assistant(self.now - 1)])
         self.transcript(2, [self.user(self.midnight - 10), {'type': 'custom-title', 'customTitle': 'Rename today'}])
         self.transcript(3, [self.user(self.midnight)])
         self.transcript(4, [self.user(self.midnight + 86400)])
@@ -74,6 +74,7 @@ class ClaudeSessionsTest(unittest.TestCase):
                    lastActivityAt=(self.midnight - 10) * 1000, lastFocusedAt=self.now * 1000)
         sessions = {s['sessionId']: s for s in self.read()}
         self.assertEqual(set(sessions), {self.sid(1), self.sid(3), f'local_{self.sid(6)}'})
+        self.assertEqual(sessions[self.sid(1)]['title'], 'Build caf\u00e9 dashboard')
         self.assertEqual(sessions[self.sid(1)]['status'], 'completed')
         self.assertIsNone(sessions[self.sid(1)]['unread'])
         self.assertEqual(sessions[self.sid(1)]['source'], 'claude')

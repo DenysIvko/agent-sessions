@@ -368,7 +368,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             if FileManager.default.isExecutableFile(atPath: bundled.path) {
                 process.executableURL = bundled
                 process.arguments = []
-            } else if let python = [root.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent(".venv/bin/python").path,
+            } else if let python = [root.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent(".venv/bin/python").path,
                                     "/opt/homebrew/bin/python3", "/usr/local/bin/python3", "/usr/bin/python3"].first(where: { FileManager.default.isExecutableFile(atPath: $0) }) {
                 process.executableURL = URL(fileURLWithPath: python)
                 process.arguments = [root.appendingPathComponent("server.py").path]

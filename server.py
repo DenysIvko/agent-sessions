@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A loopback-only dashboard of local Codex and Claude Code sessions."""
+"""A loopback-only dashboard of local coding agent sessions."""
 
 import argparse
 from datetime import datetime, timedelta
@@ -31,7 +31,7 @@ FAVORITES_PATH = DATA_DIR / "favorites.json"
 
 def read_session_ids(path):
     try:
-        value = json.loads(path.read_text())
+        value = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
         return set()
     if not isinstance(value, list) or not all(isinstance(id, str) for id in value):
@@ -104,7 +104,7 @@ def read_sessions(codex=CODEX, loaded_ids=None, now=None, include_ids=()):
     if loaded_ids is None:
         loaded_ids = open_session_ids()
     state_path = codex / ".codex-global-state.json"
-    state = json.loads(state_path.read_text()) if state_path.exists() else {}
+    state = json.loads(state_path.read_text(encoding="utf-8")) if state_path.exists() else {}
     unread_ids = legacy_unread(state)
     connection = sqlite3.connect((codex / "state_5.sqlite").as_uri() + "?mode=ro", uri=True, timeout=2)
     connection.row_factory = sqlite3.Row
@@ -307,7 +307,12 @@ class Handler(BaseHTTPRequestHandler):
         allowed = {f"127.0.0.1:{self.server.server_port}", f"localhost:{self.server.server_port}"}
         host = self.headers.get("Host", "")
         origin = self.headers.get("Origin")
-        if host not in allowed or self.headers.get("Sec-Fetch-Site") == "cross-site" or (
+        # The public HTML shell can be opened from another app or website.
+        # Session data and mutations still require a same-origin request.
+        navigation = (self.command == "GET" and self.path == "/"
+                      and self.headers.get("Sec-Fetch-Mode") == "navigate"
+                      and self.headers.get("Sec-Fetch-Dest") == "document")
+        if host not in allowed or (self.headers.get("Sec-Fetch-Site") == "cross-site" and not navigation) or (
             origin and origin not in {f"http://{value}" for value in allowed}
         ):
             self.send_error(403)

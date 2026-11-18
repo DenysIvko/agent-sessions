@@ -152,7 +152,11 @@ class SessionsTest(unittest.TestCase):
                     self.assertEqual(response.status, 200)
                     self.assertGreater(len(response.read()), 0)
                     self.assertIn("default-src 'self'", response.headers['Content-Security-Policy'])
+            navigation = {'Sec-Fetch-Site': 'cross-site', 'Sec-Fetch-Mode': 'navigate', 'Sec-Fetch-Dest': 'document'}
+            with urlopen(Request(base + '/', headers=navigation)) as response:
+                self.assertEqual(response.status, 200)
             for path, headers, status in [
+                ('/api/sessions', navigation, 403),
                 ('/api/sessions', {'Host': 'attacker.example'}, 403),
                 ('/api/sessions', {'Origin': 'https://attacker.example'}, 403),
                 ('/api/sessions', {'Sec-Fetch-Site': 'cross-site'}, 403),

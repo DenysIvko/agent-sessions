@@ -18,7 +18,9 @@ UUID = re.compile(r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$")
 def timestamp(value):
     if not value:
         return 0
-    return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    # Antigravity stores the Go zero time for work that has not started.
+    return parsed.timestamp() if parsed.year >= 1970 else 0
 
 
 def read_sessions(now, root=ANTIGRAVITY, include_ids=(), live=None):

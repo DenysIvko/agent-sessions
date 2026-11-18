@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from antigravity_sessions import read_sessions
+from antigravity_sessions import read_sessions, timestamp
 from app_config import VERSION
 from session_monitor import SessionMonitor
 from updates import RELEASE_URL, release_update, version_tuple
@@ -17,6 +17,7 @@ SID = '00000000-0000-4000-8000-000000000001'
 class AntigravityTest(unittest.TestCase):
     def test_local_summary_tracks_activity_runs_archives_and_saved_favorites(self):
         with tempfile.TemporaryDirectory() as directory:
+            self.assertEqual(timestamp("0001-01-01T00:00:00Z"), 0)
             root = Path(directory)
             with closing(sqlite3.connect(root / 'conversation_summaries.db')) as connection, connection:
                 connection.executescript('''

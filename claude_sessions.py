@@ -36,7 +36,7 @@ def live_sessions(root):
         busy = set()
         for path in (root / "sessions").glob("*.json"):
             try:
-                row = json.loads(path.read_text())
+                row = json.loads(path.read_text(encoding="utf-8"))
             except (FileNotFoundError, json.JSONDecodeError):
                 continue
             if row.get("pid") in pids and (row.get("status") in ("busy", "running") or row.get("isBusy") is True):
@@ -49,7 +49,7 @@ def live_sessions(root):
     busy = set()
     for path in (root / "sessions").glob("*.json"):
         try:
-            row = json.loads(path.read_text())
+            row = json.loads(path.read_text(encoding="utf-8"))
         except (FileNotFoundError, json.JSONDecodeError):
             continue
         if row.get("pid") in pids and (row.get("status") in ("busy", "running") or row.get("isBusy") is True):
@@ -75,7 +75,7 @@ def read_transcript(path):
     info = {"createdAt": 0, "activityAt": 0, "startedAt": None, "endedAt": None,
             "status": None, "pending": False, "title": "", "cwd": "", "branch": "", "model": ""}
     first_prompt = ""
-    with path.open() as stream:
+    with path.open(encoding="utf-8") as stream:
         for line in stream:
             try:
                 row = json.loads(line)
@@ -145,7 +145,7 @@ class ClaudeSessions:
             if not SESSION_ID.fullmatch(path.stem):
                 continue
             try:
-                marker = json.loads((path.parent / path.stem / "archived.json").read_text())
+                marker = json.loads((path.parent / path.stem / "archived.json").read_text(encoding="utf-8"))
             except FileNotFoundError:
                 marker = {}
             if marker.get("archived") is True:
@@ -167,7 +167,7 @@ class ClaudeSessions:
         desktop_rows = {}
         for path in self.desktop.rglob("local_*.json"):
             try:
-                row = json.loads(path.read_text())
+                row = json.loads(path.read_text(encoding="utf-8"))
             except FileNotFoundError:
                 continue
             sid = row.get("sessionId", "")

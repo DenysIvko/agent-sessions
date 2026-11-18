@@ -40,4 +40,4 @@ jobs:
             echo "Release $tag already exists; never replacing published assets."
             exit 0
           fi
-          gh release create "$tag" dist/* --target "$GITHUB_SHA" --title "Agent Sessions $version" --notes-file docs/release-notes.md
+          gh release create "$tag" dist/*.dmg dist/*.exe dist/SHA256SUMS.txt --target "$GITHUB_SHA" --title "Agent Sessions $version" --notes-file docs/release-notes.md
