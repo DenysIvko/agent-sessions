@@ -42,3 +42,10 @@ Use `python server.py --demo --port 4319` and capture the actual dashboard.
 The demo is read-only and contains fictional sessions. Never publish the normal
 port 4318 view. Windows CI can render `python windows/check_ui.py --screenshot <path>`
 offscreen using the actual tray controls. Keep public images in `site/assets/`.
+
+On Windows, offscreen screenshot rendering needs system fonts explicitly:
+
+```powershell
+$env:QT_QPA_FONTDIR = Join-Path $env:SystemRoot "Fonts"
+python windows/check_ui.py --screenshot site/assets/tray.png
+```

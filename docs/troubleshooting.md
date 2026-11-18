@@ -53,3 +53,10 @@ are cached for six hours; offline/API failures retry later. Updates are download
 through GitHub and installed manually. Favorites and archives are outside the app bundle.
 If another program owns port 4318, quit it or use `server.py --port <port>` for a web-only
 source run. The desktop app expects port 4318.
+
+## Reporting an issue
+
+Include the app version, operating system, source app versions, and steps to reproduce.
+Use disposable sessions or the fictional demo for screenshots. Remove conversation
+contents, titles, session IDs, account names, personal paths, tokens, and credentials
+from logs or evidence before sharing them publicly.

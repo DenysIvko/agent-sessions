@@ -8,7 +8,7 @@ and get a notification when an agent finishes.
 [Website](https://denysivko.github.io/agent-sessions/) ·
 [Report an issue](https://github.com/DenysIvko/agent-sessions/issues)
 
-![Agent Sessions dashboard with fictional demo sessions](site/assets/dashboard.png)
+![Agent Sessions dashboard with fictional demo sessions](site/assets/dashboard.jpg)
 
 ## What you get
 
@@ -76,7 +76,7 @@ local hidden record.
 The local HTTP server binds only to `127.0.0.1`. Mutations require a same-origin
 JSON request with a custom header. It exposes selected session metadata, not a
 transcript download API or arbitrary filesystem access. The Claude reader parses
-transcripts locally to determine activity and titles. Credentials are not read.
+transcripts locally to determine activity and titles. Credential files are not read.
 There is no telemetry. Update checks contact only GitHub's public Releases API and
 send no session information. Downloading an update uses GitHub's asset hosting.
 See [data locations and troubleshooting](docs/troubleshooting.md).
