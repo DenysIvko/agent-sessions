@@ -20,7 +20,10 @@ export function updateAnalytics(preference) {
     : preference.enabled ? 'Anonymous usage events are enabled.' : 'Usage events are off on this device.';
 }
 
-document.querySelector('#privacy-open').addEventListener('click', () => dialog.showModal());
+document.querySelector('#privacy-open').addEventListener('click', () => {
+  track('navigation_requested', { destination: 'privacy' });
+  dialog.showModal();
+});
 document.querySelector('#privacy-close').addEventListener('click', () => dialog.close());
 toggle.addEventListener('change', async () => {
   const enabled = toggle.checked;

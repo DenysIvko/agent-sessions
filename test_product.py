@@ -9,7 +9,7 @@ from unittest.mock import patch
 from antigravity_sessions import read_sessions, timestamp
 from app_config import VERSION
 from session_monitor import SessionMonitor
-from updates import RELEASE_URL, release_update, version_tuple
+from updates import RELEASE_URL, UpdateChecker, release_update, version_tuple
 
 SID = '00000000-0000-4000-8000-000000000001'
 
@@ -48,6 +48,19 @@ class AntigravityTest(unittest.TestCase):
 
 
 class UpdateTest(unittest.TestCase):
+    def test_failed_update_check_is_not_reported_as_current_and_can_recover(self):
+        checker = UpdateChecker()
+        with patch('updates.urlopen', side_effect=OSError('private URL')), patch('updates.time.time', return_value=100000):
+            result = checker.check()
+            self.assertEqual(result['checkStatus'], 'failed')
+            self.assertNotIn('private', json.dumps(result))
+        with patch('updates.urlopen') as request, patch('updates.time.time', return_value=104000):
+            request.return_value.__enter__.return_value.read.return_value = json.dumps({'tag_name': 'v0.0.0'}).encode()
+            self.assertEqual(checker.check()['checkStatus'], 'ok')
+            self.assertFalse(checker.result['available'])
+            checker.check()
+            request.assert_called_once()
+
     def test_semver_and_only_expected_github_assets(self):
         version_tuple(VERSION)
         asset = 'Agent-Sessions-Windows-x64-Setup.exe'

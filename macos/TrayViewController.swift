@@ -158,11 +158,12 @@ final class TrayViewController: NSViewController, NSTableViewDataSource, NSTable
     var onOpenWeb: (() -> Void)?
     var onHelp: (() -> Void)?
     var onSelectView: ((String) -> Void)?
-    var onSearch: (() -> Void)?
+    var onSearch: ((String) -> Void)?
     var onNotifications: ((NSButton) -> Void)?
     private let summary = NSTextField(labelWithString: "Connecting...")
     private let tabs = NSSegmentedControl(labels: ["New", "All", "Favorites"], trackingMode: .selectOne, target: nil, action: nil)
     private let search = NSSearchField()
+    private var lastSearch = ""
     private let table = NSTableView()
     private let scroll = NSScrollView()
     private let empty = NSTextField(labelWithString: "No sessions with activity today")
@@ -302,6 +303,7 @@ final class TrayViewController: NSViewController, NSTableViewDataSource, NSTable
         _ = view
         tabs.selectedSegment = 0
         search.stringValue = ""
+        lastSearch = ""
         render()
     }
 
@@ -338,7 +340,12 @@ final class TrayViewController: NSViewController, NSTableViewDataSource, NSTable
         return cell
     }
     func controlTextDidChange(_ obj: Notification) { render() }
-    func controlTextDidEndEditing(_ obj: Notification) { if !search.stringValue.isEmpty { onSearch?() } }
+    func controlTextDidEndEditing(_ obj: Notification) {
+        if search.stringValue != lastSearch {
+            onSearch?(search.stringValue.isEmpty ? "cleared" : "applied")
+            lastSearch = search.stringValue
+        }
+    }
     @objc private func tabChanged() {
         onSelectView?(["new", "all", "favorites"][tabs.selectedSegment])
         render()

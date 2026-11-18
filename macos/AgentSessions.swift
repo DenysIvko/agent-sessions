@@ -28,6 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private let network = URLSession(configuration: .ephemeral)
     private let notifications = UNUserNotificationCenter.current()
     private var notificationState = "Checking permission"
+    private var trackedNotificationPermission: String?
     private var latestSnapshot: DashboardSnapshot?
     private var lastNotificationError: String?
     private var lastNotificationTitle = ""
@@ -59,14 +60,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         dashboard.onOpenWeb = { [weak self] in self?.openBrowser() }
         dashboard.onHelp = { [weak self] in self?.openTutorial() }
         dashboard.onSelectView = { [weak self] view in self?.track("view_selected", ["view": view]) }
-        dashboard.onSearch = { [weak self] in self?.track("filter_used", ["filter": "search"]) }
+        dashboard.onSearch = { [weak self] selection in self?.track("filter_used", ["filter": "search", "selection": selection]) }
         dashboard.onNotifications = { [weak self] button in
             DispatchQueue.main.async { self?.showMenu(anchor: button) }
         }
         dashboard.onOpenSession = { [weak self] session in self?.openSession(session) }
         dashboard.onArchiveSession = { [weak self] session in self?.archiveSession(session) }
         dashboard.onFavoriteSession = { [weak self] session in self?.setFavorite(session) }
-        dashboard.onMarkReviewed = { [weak self] session in self?.markReviewed(session) }
+        dashboard.onMarkReviewed = { [weak self] session in self?.markReviewed(session, method: "manual") }
         notifications.delegate = self
         notifications.getDeliveredNotifications { [weak self] items in
             DispatchQueue.main.async {
@@ -134,7 +135,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         addItem("Notification Settings...", action: #selector(openNotificationSettings), to: menu)
         menu.addItem(.separator())
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
-        addItem((updateInfo?["version"] as? String).map { "Download Update \($0)" } ?? "Check for Updates", action: #selector(checkForUpdates), to: menu)
+        addItem((updateInfo?["version"] as? String).map { "Download Update \($0)" } ?? "Check for Updates", action: #selector(updateMenuClicked), to: menu)
         menu.addItem(NSMenuItem(title: "Version \(version)", action: nil, keyEquivalent: ""))
         menu.addItem(.separator())
         addItem("Quit Agent Sessions", action: #selector(quit), to: menu, key: "q")
@@ -152,16 +153,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
 
     @objc private func openBrowser() {
+        track("navigation_requested", ["destination": "dashboard"])
         popover.performClose(nil)
         NSWorkspace.shared.open(dashboardURL)
     }
 
     @objc private func openTutorial() {
+        track("navigation_requested", ["destination": "tutorial"])
         NSWorkspace.shared.open(dashboardURL.appending(queryItems: [URLQueryItem(name: "tutorial", value: "1")]))
         popover.performClose(nil)
     }
 
     @objc private func openPrivacy() {
+        track("navigation_requested", ["destination": "privacy"])
         NSWorkspace.shared.open(dashboardURL.appending(queryItems: [URLQueryItem(name: "privacy", value: "1")]))
         popover.performClose(nil)
     }
@@ -180,22 +184,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     private func openSession(_ session: AgentSession) {
         if let raw = session.url, let url = URL(string: raw), isSessionLink(url) {
-            track("session_open_requested", ["source": session.source, "method": "link"])
-            if NSWorkspace.shared.open(url) {
-                markReviewed(session)
+            if openSessionLink(url, source: session.source) {
+                markReviewed(session, method: "open")
                 popover.performClose(nil)
             }
         } else if let command = session.resumeCommand {
             track("session_open_requested", ["source": session.source, "method": "copy"])
             NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(command, forType: .string)
-            dashboard.showFeedback("Resume command copied")
+            let copied = NSPasteboard.general.setString(command, forType: .string)
+            track("session_open_result", ["source": session.source, "method": "copy", "result": copied ? "copied" : "failed"])
+            dashboard.showFeedback(copied ? "Resume command copied" : "Could not copy the resume command")
+        } else {
+            track("session_open_result", ["source": session.source, "method": "link", "result": "unavailable"])
         }
     }
 
-    private func markReviewed(_ session: AgentSession) {
+    private func openSessionLink(_ url: URL, source: String) -> Bool {
+        track("session_open_requested", ["source": source, "method": "link"])
+        let accepted = NSWorkspace.shared.open(url)
+        track("session_open_result", ["source": source, "method": "link", "result": accepted ? "accepted" : "failed"])
+        return accepted
+    }
+
+    private func markReviewed(_ session: AgentSession, method: String) {
         reviews.markReviewed(session)
         saveReviews()
+        track("session_reviewed", ["source": session.source, "method": method])
         notifications.removeDeliveredNotifications(withIdentifiers: [session.completionID])
         if let snapshot = latestSnapshot {
             dashboard.update(snapshot, newSessions: reviews.newSessions(in: snapshot), notificationState: notificationState)
@@ -207,23 +221,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         if let data = try? JSONEncoder().encode(reviews) { UserDefaults.standard.set(data, forKey: "sessionReviews") }
     }
     @objc private func quit() { NSApp.terminate(nil) }
-    @objc private func checkForUpdates() {
+    @objc private func updateMenuClicked() {
         if let raw = updateInfo?["downloadURL"] as? String, let url = URL(string: raw) {
             track("update_download_requested")
             NSWorkspace.shared.open(url)
             return
         }
+        checkForUpdates(manual: true)
+    }
+
+    private func checkForUpdates(manual: Bool = false) {
+        let trigger = manual ? "manual" : "automatic"
+        track("update_check_requested", ["trigger": trigger])
         lastUpdateCheck = Date()
         var request = URLRequest(url: dashboardURL.appendingPathComponent("api/update"))
         request.timeoutInterval = 12
         network.dataTask(with: request) { [weak self] data, response, _ in
-            guard let data, (response as? HTTPURLResponse)?.statusCode == 200,
-                  let info = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  info["available"] as? Bool == true, let version = info["version"] as? String,
-                  let raw = info["downloadURL"] as? String,
-                  raw.hasPrefix("https://github.com/DenysIvko/agent-sessions/releases/download/v") else { return }
+            let info = data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
             DispatchQueue.main.async {
                 guard let self else { return }
+                let failed = (response as? HTTPURLResponse)?.statusCode != 200 || info == nil || info?["checkStatus"] as? String == "failed"
+                self.track("update_check_result", ["trigger": trigger, "result": failed ? "failed" : info?["available"] as? Bool == true ? "available" : "current"])
+                guard let info, info["available"] as? Bool == true, let version = info["version"] as? String,
+                      let raw = info["downloadURL"] as? String,
+                      raw.hasPrefix("https://github.com/DenysIvko/agent-sessions/releases/download/v") else { return }
                 if self.updateInfo == nil { self.track("update_available") }
                 self.updateInfo = info
                 self.dashboard.showFeedback("Update \(version) available in the tray menu")
@@ -232,8 +253,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                     content.title = "Agent Sessions update available"
                     content.body = "Version \(version) is ready. Click to download the installer."
                     content.userInfo["updateURL"] = raw
-                    self.sendNotification(identifier: "update-\(version)", content: content)
-                    self.track("notification_requested", ["kind": "update"])
+                    self.sendNotification(identifier: "update-\(version)", content: content, kind: "update")
                     UserDefaults.standard.set(version, forKey: "notifiedVersion")
                 }
             }
@@ -256,6 +276,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                     self.track("favorite_changed", ["source": session.source, "enabled": enabled])
                     self.dashboard.showFeedback(enabled ? "Saved to Favorites across all days" : "Removed from Favorites")
                 } else {
+                    self.track("action_failed", ["source": session.source, "action": "favorite", "reason": (error as? URLError)?.code == .timedOut ? "timeout" : "request_failed"])
                     let reply = data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
                     self.dashboard.showFeedback(reply?["error"] as? String ?? error?.localizedDescription ?? "Could not save favorite")
                 }
@@ -282,6 +303,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 if (response as? HTTPURLResponse)?.statusCode == 200 {
                     self.track("session_archived", ["source": session.source])
                     self.notifications.removeDeliveredNotifications(withIdentifiers: [session.completionID])
+                } else {
+                    self.track("action_failed", ["source": session.source, "action": "archive", "reason": (error as? URLError)?.code == .timedOut ? "timeout" : "request_failed"])
                 }
                 self.poll()
             }
@@ -295,6 +318,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
     }
     @objc private func openNotificationSettings() {
+        track("navigation_requested", ["destination": "notification_settings"])
         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension")!)
     }
     @objc private func testNotification() {
@@ -303,13 +327,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         content.title = "Session completed - test notification"
         content.body = "Completion alerts appear here. The tray stays closed."
         content.sound = .default
-        sendNotification(identifier: "test-\(UUID().uuidString)", content: content)
-        track("notification_requested", ["kind": "test"])
+        sendNotification(identifier: "test-\(UUID().uuidString)", content: content, kind: "test")
     }
 
     private func updateNotificationState() {
         notifications.getNotificationSettings { [weak self] settings in
             DispatchQueue.main.async {
+                if let self, self.latestSnapshot?.analytics?.configured == true {
+                    let permission = [UNAuthorizationStatus.authorized: "allowed", .denied: "denied", .notDetermined: "not_determined", .provisional: "provisional"][settings.authorizationStatus] ?? "unknown"
+                    if permission != self.trackedNotificationPermission {
+                        self.track("notification_permission_changed", ["permission": permission])
+                        self.trackedNotificationPermission = permission
+                    }
+                }
                 self?.notificationState = [UNAuthorizationStatus.authorized: "Allowed", .denied: "Not allowed", .notDetermined: "Awaiting permission", .provisional: "Quiet delivery"][settings.authorizationStatus] ?? "Unknown"
                 self?.writeStatus()
             }
@@ -346,7 +376,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     private func handle(_ snapshot: DashboardSnapshot) {
         latestSnapshot = snapshot
-        if !openedTracked { track("app_opened"); openedTracked = true }
+        if !openedTracked { track("app_opened"); openedTracked = true; updateNotificationState() }
         let running = snapshot.sessions.filter(\.running).count
         statusMessage = snapshot.error == nil ? "\(snapshot.sessions.count) sessions today - \(running) running" : "Some session data is unavailable"
         statusItem.button?.title = snapshot.error == nil ? (running > 0 ? " \(running)" : "") : " !"
@@ -365,17 +395,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 content.sound = .default
                 content.threadIdentifier = session.source
                 if let url = session.url { content.userInfo["sessionURL"] = url }
-                sendNotification(identifier: session.completionID, content: content)
-                track("notification_requested", ["kind": "completion"])
+                sendNotification(identifier: session.completionID, content: content, kind: "completion")
             }
         }
         writeStatus()
     }
 
-    private func sendNotification(identifier: String, content: UNNotificationContent) {
+    private func sendNotification(identifier: String, content: UNNotificationContent, kind: String) {
+        track("notification_requested", ["kind": kind])
         lastNotificationTitle = content.title
         notifications.add(UNNotificationRequest(identifier: identifier, content: content, trigger: nil)) { [weak self] error in
             DispatchQueue.main.async {
+                self?.track("notification_send_result", ["kind": kind, "result": error == nil ? "accepted" : "failed"])
                 self?.lastNotificationError = error?.localizedDescription
                 self?.writeStatus()
             }
@@ -462,9 +493,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 NSWorkspace.shared.open(url)
             } else if let raw = response.notification.request.content.userInfo["sessionURL"] as? String,
                let url = URL(string: raw), isSessionLink(url) {
-                if NSWorkspace.shared.open(url),
+                let source = url.scheme == "codex" ? "codex" : "claude"
+                if self.openSessionLink(url, source: source),
                    let session = self.latestSnapshot?.sessionsIncludingFavorites.first(where: { $0.url == raw }) {
-                    self.markReviewed(session)
+                    self.markReviewed(session, method: "notification")
                 }
             }
             else { self.openBrowser() }

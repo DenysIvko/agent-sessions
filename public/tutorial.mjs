@@ -8,28 +8,29 @@ const storageKey = 'agent-sessions-tour-seen';
 let step = 0;
 let completed = false;
 
-function render() {
+function render(direction) {
   steps.forEach((section, index) => { section.hidden = index !== step; });
   document.querySelector('#tutorial-progress').textContent = `${step + 1} of ${steps.length}`;
   back.disabled = step === 0;
   next.textContent = step === steps.length - 1 ? 'Done' : 'Next';
   steps[step].querySelector('h3').focus();
+  track('tutorial_step_viewed', { step: step + 1, direction });
 }
 
-function open() {
+function open(entry) {
   step = 0;
   completed = false;
   dialog.showModal();
-  track('tutorial_started');
-  render();
+  track('tutorial_started', { entry });
+  render('start');
 }
 
-help.addEventListener('click', open);
+help.addEventListener('click', () => open('help'));
 document.querySelector('#tutorial-close').addEventListener('click', () => dialog.close());
-back.addEventListener('click', () => { step--; render(); });
+back.addEventListener('click', () => { step--; render('back'); });
 next.addEventListener('click', () => {
   if (step === steps.length - 1) { completed = true; dialog.close(); }
-  else { step++; render(); }
+  else { step++; render('next'); }
 });
 dialog.addEventListener('close', () => {
   track(completed ? 'tutorial_completed' : 'tutorial_dismissed', completed ? {} : { step: step + 1 });
@@ -45,4 +46,4 @@ if (requested) {
 }
 let seen = false;
 try { seen = localStorage.getItem(storageKey) === '1'; } catch { /* Storage may be disabled. */ }
-if (!url.searchParams.has('privacy') && (requested || !seen)) open();
+if (!url.searchParams.has('privacy') && (requested || !seen)) open(requested ? 'link' : 'first_run');

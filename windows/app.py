@@ -131,7 +131,7 @@ class TrayWindow(QWidget):
         header.addStretch()
         web = QPushButton("Open Web Dashboard")
         web.setToolTip("Open the full dashboard with source, project and status filters")
-        web.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(BASE)))
+        web.clicked.connect(self.open_dashboard)
         header.addWidget(web)
         layout.addLayout(header)
         self.summary = QLabel("Connecting...")
@@ -151,7 +151,8 @@ class TrayWindow(QWidget):
         self.search.setAccessibleName("Search sessions")
         self.search.setToolTip("Search the selected tab by title, project, source, branch or ID")
         self.search.textChanged.connect(self.render)
-        self.search.editingFinished.connect(lambda: self.track('filter_used', filter='search') if self.search.text() else None)
+        self.last_search = ''
+        self.search.editingFinished.connect(self.search_finished)
         layout.addWidget(self.search)
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
@@ -171,7 +172,7 @@ class TrayWindow(QWidget):
         self.tray.messageClicked.connect(self.notification_clicked)
         menu = QMenu()
         menu.addAction("Show Sessions", self.show_new)
-        menu.addAction("Open Web Dashboard", lambda: QDesktopServices.openUrl(QUrl(BASE)))
+        menu.addAction("Open Web Dashboard", self.open_dashboard)
         menu.addAction("Quick Tour", self.open_tutorial)
         menu.addAction("Usage Analytics...", self.open_privacy)
         notifications = QAction("Completion notifications", menu)
@@ -206,6 +207,7 @@ class TrayWindow(QWidget):
         self.track('tray_opened')
         self.tabs.setCurrentIndex(0)
         self.search.clear()
+        self.last_search = ''
         area = self.app.primaryScreen().availableGeometry()
         self.resize(min(470, area.width()), min(610, area.height()))
         self.move(area.right() - self.width(), area.bottom() - self.height())
@@ -315,32 +317,54 @@ class TrayWindow(QWidget):
                     self.track('favorite_changed', source=session['source'], enabled=payload['favorite'])
                 else:
                     self.track('session_archived', source=session['source'])
+            else:
+                self.track('action_failed', source=session['source'],
+                           action='favorite' if endpoint == '/api/favorite' else 'archive', reason='request_failed')
             self.footer.setText(error or ("Archived in Agent Sessions" if endpoint == '/api/archive' else "Favorite saved"))
             self.poll()
         QThreadPool.globalInstance().start(Task(lambda: request(endpoint, payload), done))
 
     def open_session(self, session):
         url = session.get('url') or ''
+        method = 'open'
         if url.startswith(('codex://threads/', 'claude://epitaxy/', 'claude://resume?session=')):
             self.track('session_open_requested', source=session['source'], method='link')
-            if not QDesktopServices.openUrl(QUrl(url)):
+            opened = QDesktopServices.openUrl(QUrl(url))
+            self.track('session_open_result', source=session['source'], method='link', result='accepted' if opened else 'failed')
+            if not opened:
                 self.footer.setText(f"Install {SOURCES[session['source']]} to open this session")
                 return
         elif session.get('resumeCommand'):
+            method = 'copy'
             self.track('session_open_requested', source=session['source'], method='copy')
             self.app.clipboard().setText(session['resumeCommand'])
+            self.track('session_open_result', source=session['source'], method='copy', result='copied')
             self.footer.setText("Resume command copied. Paste it in your terminal.")
         else:
+            self.track('session_open_result', source=session['source'], method='link', result='unavailable')
             return
         self.monitor.mark_reviewed(session)
         self.save_reviews()
+        self.track('session_reviewed', source=session['source'], method=method)
         self.render()
 
+    def search_finished(self):
+        query = self.search.text()
+        if query != self.last_search:
+            self.track('filter_used', filter='search', selection='applied' if query else 'cleared')
+            self.last_search = query
+
+    def open_dashboard(self):
+        self.track('navigation_requested', destination='dashboard')
+        QDesktopServices.openUrl(QUrl(BASE))
+
     def open_tutorial(self):
+        self.track('navigation_requested', destination='tutorial')
         QDesktopServices.openUrl(QUrl(BASE + '/?tutorial=1'))
         self.hide()
 
     def open_privacy(self):
+        self.track('navigation_requested', destination='privacy')
         QDesktopServices.openUrl(QUrl(BASE + '/?privacy=1'))
         self.hide()
 
@@ -362,12 +386,16 @@ class TrayWindow(QWidget):
             self.track('update_download_requested')
             QDesktopServices.openUrl(QUrl(self.update_info['downloadURL']))
         else:
-            self.check_updates()
+            self.check_updates(manual=True)
 
-    def check_updates(self):
+    def check_updates(self, manual=False):
         if self.update_info:
             return
+        trigger = 'manual' if manual else 'automatic'
+        self.track('update_check_requested', trigger=trigger)
         def done(data, error):
+            result = 'failed' if error or not data or data.get('checkStatus') == 'failed' else 'available' if data.get('available') else 'current'
+            self.track('update_check_result', trigger=trigger, result=result)
             if data and data.get('available'):
                 self.track('update_available')
                 self.update_info = data
@@ -391,7 +419,7 @@ def main():
     try:
         server = ThreadingHTTPServer(('127.0.0.1', 4318), Handler)
         server.analytics = Analytics()
-        server.snapshot = Snapshot()
+        server.snapshot = Snapshot(analytics=server.analytics)
         threading.Thread(target=server.snapshot.refresh, daemon=True).start()
         threading.Thread(target=server.serve_forever, daemon=True).start()
     except OSError:

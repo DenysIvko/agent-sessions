@@ -12,24 +12,46 @@ import uuid
 
 from app_config import DATA_DIR, ROOT, VERSION
 
-SURFACES = {"web", "tray"}
+SURFACES = {"web", "tray", "backend"}
 SOURCES = {"codex", "claude", "antigravity"}
+FILTER_SELECTIONS = {
+    "source": SOURCES | {"all"},
+    "status": {"all", "running", "unread", "read", "completed", "stopped", "failed", "inactive"},
+    "type": {"all", "chat", "scheduled"},
+    "project": {"selected", "cleared"},
+    "search": {"applied", "cleared"},
+    "clear": {"cleared"},
+}
 EVENTS = {
     "app_opened": {},
     "dashboard_opened": {},
     "tray_opened": {},
     "view_selected": {"view": {"new", "all", "favorites"}},
-    "filter_used": {"filter": {"source", "project", "status", "type", "search", "clear"}},
+    "filter_used": {"filter": set(FILTER_SELECTIONS), "selection": set.union(*FILTER_SELECTIONS.values())},
     "session_open_requested": {"source": SOURCES, "method": {"link", "copy"}},
+    "session_open_result": {"source": SOURCES, "method": {"link", "copy"},
+                            "result": {"accepted", "copied", "manual_copy", "failed", "unavailable"}},
+    "session_reviewed": {"source": SOURCES, "method": {"manual", "open", "copy", "notification"}},
     "favorite_changed": {"source": SOURCES, "enabled": bool},
     "session_archived": {"source": SOURCES},
-    "tutorial_started": {},
+    "action_failed": {"source": SOURCES, "action": {"favorite", "archive"},
+                      "reason": {"timeout", "request_failed"}},
+    "source_status_changed": {"source": SOURCES, "status": {"data", "empty", "error"}},
+    "source_archive_result": {"source": SOURCES,
+                              "result": {"completed", "failed", "skipped_running", "skipped_unavailable", "unsupported"}},
+    "navigation_requested": {"destination": {"dashboard", "tutorial", "privacy", "notification_settings"}},
+    "tutorial_started": {"entry": {"first_run", "help", "link"}},
+    "tutorial_step_viewed": {"step": set(range(1, 8)), "direction": {"start", "next", "back"}},
     "tutorial_completed": {},
     "tutorial_dismissed": {"step": set(range(1, 8))},
     "notification_requested": {"kind": {"completion", "update", "test"}},
     "notification_clicked": {},
     "notifications_toggled": {"enabled": bool},
+    "notification_permission_changed": {"permission": {"allowed", "denied", "not_determined", "provisional", "unknown"}},
+    "notification_send_result": {"kind": {"completion", "update", "test"}, "result": {"accepted", "failed"}},
     "update_available": {},
+    "update_check_requested": {"trigger": {"manual", "automatic"}},
+    "update_check_result": {"trigger": {"manual", "automatic"}, "result": {"available", "current", "failed"}},
     "update_download_requested": {},
 }
 
@@ -48,6 +70,8 @@ def validate_event(event, properties):
             valid = type(value) in (str, int) and value in allowed
         if not valid:
             raise ValueError("Invalid analytics property.")
+    if event == "filter_used" and properties["selection"] not in FILTER_SELECTIONS[properties["filter"]]:
+        raise ValueError("Invalid filter selection.")
 
 
 def configuration():

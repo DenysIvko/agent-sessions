@@ -3,11 +3,11 @@ from pathlib import Path
 import tempfile
 import threading
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from product_analytics import Analytics, validate_event
+from product_analytics import Analytics, EVENTS, FILTER_SELECTIONS, validate_event
 from server import Handler, Snapshot, ThreadingHTTPServer
 
 CONFIG = {'key': 'phc_fixture', 'host': 'https://eu.i.posthog.com'}
@@ -59,9 +59,72 @@ class AnalyticsTest(unittest.TestCase):
             ('session_archived', {'surface': 'web', 'source': {'title': 'private'}}),
             ('favorite_changed', {'surface': 'tray', 'source': 'codex', 'enabled': 1}),
             ('tutorial_dismissed', {'surface': 'web', 'step': True}),
+            ('filter_used', {'surface': 'web', 'filter': 'project', 'selection': '/private/project'}),
+            ('filter_used', {'surface': 'web', 'filter': 'search', 'selection': 'codex'}),
+            ('action_failed', {'surface': 'tray', 'source': 'codex', 'action': 'archive', 'reason': 'secret error'}),
+            ('source_status_changed', {'surface': 'backend', 'source': 'claude', 'status': 'error', 'path': '/private'}),
         ]:
             with self.subTest(event=event), self.assertRaises(ValueError):
                 validate_event(event, properties)
+
+    def test_every_event_and_filter_choice_accepts_only_its_declared_properties(self):
+        for event, schema in EVENTS.items():
+            props = {key: False if allowed is bool else next(iter(allowed)) for key, allowed in schema.items()}
+            props['surface'] = 'web'
+            if event == 'filter_used':
+                props['selection'] = next(iter(FILTER_SELECTIONS[props['filter']]))
+            with self.subTest(event=event):
+                validate_event(event, props)
+                with self.assertRaises(ValueError):
+                    validate_event(event, {**props, 'session_id': 'private'})
+                for key in props:
+                    with self.assertRaises(ValueError):
+                        validate_event(event, {k: v for k, v in props.items() if k != key})
+        for kind, choices in FILTER_SELECTIONS.items():
+            for selection in choices:
+                validate_event('filter_used', {'surface': 'web', 'filter': kind, 'selection': selection})
+
+    def test_source_health_tracks_initial_state_and_changes_not_polls_or_private_errors(self):
+        capture = Mock(side_effect=validate_event)
+        snapshot = Snapshot(Path(self.directory.name) / 'favorites.json', analytics=Mock(capture=capture))
+        row = {'id': 'private-session', 'source': 'codex', 'title': 'private title'}
+        with (patch('server.read_sessions', return_value={'sessions': [row]}) as codex,
+              patch.object(snapshot.claude, 'read', return_value=[]),
+              patch('server.read_antigravity_sessions', return_value=[]), patch('builtins.print')):
+            snapshot.refresh_once()
+            snapshot.refresh_once()
+            self.assertEqual(capture.call_count, 3)
+            codex.side_effect = OSError('/private/path with credentials')
+            snapshot.refresh_once()
+            snapshot.refresh_once()
+            self.assertEqual(capture.call_count, 4)
+            codex.side_effect = None
+            snapshot.refresh_once()
+            self.assertEqual(capture.call_count, 5)
+        self.assertEqual([call.args[1]['status'] for call in capture.call_args_list],
+                         ['data', 'empty', 'empty', 'error', 'data'])
+        self.assertNotIn('private', str(capture.call_args_list))
+
+    def test_source_archive_reports_background_outcomes_and_keeps_local_hide(self):
+        capture = Mock(side_effect=validate_event)
+        snapshot = Snapshot(Path(self.directory.name) / 'favorites.json', analytics=Mock(capture=capture))
+        row = {'id': 'private-session', 'source': 'codex', 'title': 'private title'}
+        with patch('server.archive_session') as archive, patch('builtins.print'):
+            snapshot._archive_in_source(row)
+            archive.side_effect = RuntimeError('private credentials in error')
+            snapshot._archive_in_source(row)
+        self.assertEqual([c.args[1]['result'] for c in capture.call_args_list], ['completed', 'failed'])
+        for index, (extra, result) in enumerate([
+            ({'running': True}, 'skipped_running'),
+            ({'source': 'antigravity'}, 'unsupported'),
+            ({}, 'skipped_unavailable'),
+        ]):
+            session = {**row, **extra, 'id': str(index)}
+            snapshot.data = {'sessions': [session], 'sourceErrors': {'codex': 'private failure'}}
+            snapshot.archive(session['id'])
+            self.assertEqual(snapshot.data['sessions'], [])
+            self.assertEqual(capture.call_args.args[1]['result'], result)
+        self.assertNotIn('private', str(capture.call_args_list))
 
     def test_actual_sdk_wire_payload_strips_context_and_disables_person_processing(self):
         analytics = self.analytics()

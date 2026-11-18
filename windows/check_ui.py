@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import QApplication, QPushButton, QWidget
 from demo import snapshot
+from product_analytics import validate_event
 from windows.app import POLL_STATUS, RECONNECT_STATUS, TrayWindow
 
 app = QApplication.instance() or QApplication([])
@@ -122,3 +123,49 @@ with tempfile.TemporaryDirectory() as directory:
     assert view.footer.text() == POLL_STATUS
     view.hide()
     print('Windows tray: notifications, explicit update link, reconnect status and scroll passed.')
+
+    events = []
+    def capture(event, **properties):
+        validate_event(event, {'surface': 'tray', **properties})
+        events.append((event, properties))
+    session = {**completed, 'id': 'qa-action', 'source': 'codex', 'url': 'codex://threads/qa-action'}
+    with (patch.object(view, 'track', side_effect=capture), patch.object(view, 'poll'),
+          patch('windows.app.QThreadPool') as pool, patch('windows.app.request', return_value={}) as request,
+          patch('windows.app.QDesktopServices.openUrl', return_value=False) as open_url):
+        pool.globalInstance.return_value.start.side_effect = lambda task: task.run()
+        view.open_dashboard()
+        view.open_tutorial()
+        view.open_privacy()
+        view.search.setText('private project and search')
+        view.search_finished()
+        view.search_finished()
+        view.search.clear()
+        view.search_finished()
+        assert len([e for e in events if e[0] == 'filter_used']) == 2
+        view.open_session(session)
+        assert events[-1] == ('session_open_result', {'source': 'codex', 'method': 'link', 'result': 'failed'})
+        open_url.return_value = True
+        view.open_session(session)
+        assert events[-1] == ('session_reviewed', {'source': 'codex', 'method': 'open'})
+        view.open_session({**session, 'url': None, 'resumeCommand': 'qa-only-placeholder'})
+        assert events[-2] == ('session_open_result', {'source': 'codex', 'method': 'copy', 'result': 'copied'})
+        view.open_session({**session, 'url': None, 'resumeCommand': None})
+        assert events[-1][1]['result'] == 'unavailable'
+        view.action(session, '/api/favorite')
+        assert events[-1][0] == 'favorite_changed'
+        view.action(session, '/api/archive')
+        assert events[-1][0] == 'session_archived'
+        request.side_effect = OSError('private path and credentials')
+        for endpoint, action in [('/api/favorite', 'favorite'), ('/api/archive', 'archive')]:
+            view.action(session, endpoint)
+            assert events[-1] == ('action_failed', {'source': 'codex', 'action': action, 'reason': 'request_failed'})
+        view.update_info = None
+        with patch('windows.app.checker.check', return_value={'available': False, 'checkStatus': 'failed'}):
+            view.update_menu_clicked()
+        assert events[-2:] == [('update_check_requested', {'trigger': 'manual'}),
+                              ('update_check_result', {'trigger': 'manual', 'result': 'failed'})]
+        with patch('windows.app.checker.check', return_value={'available': False, 'checkStatus': 'ok'}):
+            view.check_updates()
+        assert events[-1] == ('update_check_result', {'trigger': 'automatic', 'result': 'current'})
+    assert 'private' not in str(events) and 'qa-action' not in str(events)
+    print('Windows analytics: actions, failures, navigation, search deduplication, review and update results passed.')

@@ -137,17 +137,21 @@ enum MonitorTests {
         var tabs: NSSegmentedControl?
         var table: NSTableView?
         var helpButton: NSButton?
+        var searchField: NSSearchField?
         while !views.isEmpty {
             let view = views.removeLast()
             if let control = view as? NSSegmentedControl, control.accessibilityLabel() == "Session view" { tabs = control }
             if let control = view as? NSTableView { table = control }
             if let button = view as? NSButton, button.title == "Help" { helpButton = button }
+            if let field = view as? NSSearchField { searchField = field }
             expect(view.accessibilityLabel() != "Session source" && view.accessibilityLabel() != "Session status",
                    "the redundant source and status filter row is removed")
             views.append(contentsOf: view.subviews)
         }
         expect(tabs?.segmentCount == 3, "New, All and Favorites tabs are accessible")
         var helpOpened = false
+        var selectedViews: [String] = []
+        tray.onSelectView = { selectedViews.append($0) }
         tray.onHelp = { helpOpened = true }
         expect(helpButton != nil, "the tray exposes Help")
         helpButton!.performClick(nil)
@@ -158,6 +162,15 @@ enum MonitorTests {
         tabs!.selectedSegment = 2
         expect(NSApp.sendAction(tabs!.action!, to: tabs!.target, from: tabs), "Favorites is connected to its handler")
         expect(tray.selectedView == "Favorites" && tray.rowCount == 1, "Favorites includes saved sessions across days")
+        expect(selectedViews == ["all", "favorites"], "view analytics uses fixed view names")
+        var searches: [String] = []
+        tray.onSearch = { searches.append($0) }
+        searchField!.stringValue = "private search text"
+        tray.controlTextDidEndEditing(Notification(name: NSControl.textDidEndEditingNotification))
+        tray.controlTextDidEndEditing(Notification(name: NSControl.textDidEndEditingNotification))
+        searchField!.stringValue = ""
+        tray.controlTextDidEndEditing(Notification(name: NSControl.textDidEndEditingNotification))
+        expect(searches == ["applied", "cleared"], "search analytics deduplicates focus changes and excludes query text")
         tray.showNewSessions()
         expect(tray.selectedView == "New" && tray.rowCount == 2, "reopening the tray returns to New")
         var archivedID: String?

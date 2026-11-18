@@ -13,6 +13,7 @@ let favoritesOnly = false;
 let requestInFlight = false;
 let nextRefresh = Date.now();
 let toastTimer;
+let lastSearch = '';
 const archiving = new Set();
 const savingFavorites = new Set();
 
@@ -318,14 +319,14 @@ $('#tiles').addEventListener('click', event => {
   const button = event.target.closest('[data-filter]');
   if (!button) return;
   statusFilter = statusFilter === button.dataset.filter ? 'all' : button.dataset.filter;
-  track('filter_used', { filter: 'status' });
+  track('filter_used', { filter: 'status', selection: statusFilter });
   render();
 });
 $('#sources').addEventListener('click', event => {
   const button = event.target.closest('[data-source]');
   if (!button) return;
   sourceFilter = sourceFilter === button.dataset.source ? '' : button.dataset.source;
-  track('filter_used', { filter: 'source' });
+  track('filter_used', { filter: 'source', selection: sourceFilter || 'all' });
   render();
 });
 $('#favorites').addEventListener('click', () => {
@@ -337,15 +338,16 @@ $('#projects').addEventListener('click', event => {
   const button = event.target.closest('[data-project]');
   if (!button) return;
   projectFilter = projectFilter === button.dataset.project ? '' : button.dataset.project;
-  track('filter_used', { filter: 'project' });
+  track('filter_used', { filter: 'project', selection: projectFilter ? 'selected' : 'cleared' });
   render();
 });
 $('#clear-filters').addEventListener('click', () => {
-  track('filter_used', { filter: 'clear' });
+  track('filter_used', { filter: 'clear', selection: 'cleared' });
   statusFilter = 'all';
   projectFilter = '';
   sourceFilter = '';
   $('#search').value = '';
+  lastSearch = '';
   $('#kind').value = '';
   render();
   $('#search').focus();
@@ -377,6 +379,7 @@ $('#board').addEventListener('click', async event => {
       toast.textContent = result.favorite ? 'Saved to Favorites. It will stay available across days.' : 'Removed from Favorites.';
       await refresh();
     } catch (error) {
+      track('action_failed', { source: session.source, action: 'favorite', reason: error.name === 'TimeoutError' ? 'timeout' : 'request_failed' });
       toast.textContent = error.name === 'TimeoutError' ? 'Favorite was not confirmed. Check the star after the next update.' : error.message;
     } finally {
       savingFavorites.delete(session.id);
@@ -404,6 +407,7 @@ $('#board').addEventListener('click', async event => {
       toast.textContent = result.message;
       await refresh();
     } catch (error) {
+      track('action_failed', { source: session.source, action: 'archive', reason: error.name === 'TimeoutError' ? 'timeout' : 'request_failed' });
       toast.textContent = error.name === 'TimeoutError' ? 'Local archive was not confirmed. Refresh before retrying.' : error.message;
       $('#action-error span').textContent = `${session.title}: ${toast.textContent}`;
       $('#action-error').hidden = false;
@@ -422,8 +426,10 @@ $('#board').addEventListener('click', async event => {
     event.preventDefault();
     try {
       await navigator.clipboard.writeText(session.resumeCommand);
+      track('session_open_result', { source: session.source, method: 'copy', result: 'copied' });
       toast.textContent = `Resume command copied. Paste it in your terminal to open ${SOURCE_META[session.source].label}.`;
     } catch {
+      track('session_open_result', { source: session.source, method: 'copy', result: 'manual_copy' });
       window.prompt(`Copy this command to resume in ${SOURCE_META[session.source].label}:`, session.resumeCommand);
       toast.textContent = 'Paste the resume command in your terminal.';
     }
@@ -441,15 +447,22 @@ $('#board').addEventListener('keydown', event => {
   }
 });
 $('#search').addEventListener('input', render);
-$('#search').addEventListener('change', () => { if ($('#search').value) track('filter_used', { filter: 'search' }); });
-$('#kind').addEventListener('change', () => { render(); track('filter_used', { filter: 'type' }); });
+function trackSearch() {
+  const query = $('#search').value;
+  if (query !== lastSearch) track('filter_used', { filter: 'search', selection: query ? 'applied' : 'cleared' });
+  lastSearch = query;
+}
+$('#search').addEventListener('blur', trackSearch);
+$('#kind').addEventListener('change', () => { render(); track('filter_used', { filter: 'type', selection: $('#kind').value.toLowerCase() || 'all' }); });
 document.addEventListener('keydown', event => {
+  if (event.key === 'Enter' && document.activeElement === $('#search')) trackSearch();
   if (event.key === '/' && !document.querySelector('dialog[open]') && !['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
     event.preventDefault();
     $('#search').focus();
   }
   if (event.key === 'Escape' && document.activeElement === $('#search')) {
     $('#search').value = '';
+    trackSearch();
     render();
     $('#search').blur();
   }
