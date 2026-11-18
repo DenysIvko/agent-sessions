@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Agent Sessions</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" type="module"></script>
+</head>
+<body class="csd">
+  <svg class="csd-symbols" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <symbol id="icon-code" viewBox="0 0 24 24"><path d="m8 9-3 3 3 3m8-6 3 3-3 3M13.5 6l-3 12"/></symbol>
+      <symbol id="icon-claude" viewBox="0 0 24 24"><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M5.6 18.4 18.4 5.6"/></symbol>
+      <symbol id="icon-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V4H4v12h4"/></symbol>
+      <symbol id="icon-archive" viewBox="0 0 24 24"><path d="M4 9v11h16V9M3 4h18v5H3zM9 13h6"/></symbol>
+      <symbol id="icon-spinner" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" opacity=".25"/><path d="M12 3a9 9 0 0 1 9 9"/></symbol>
+      <symbol id="icon-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+      <symbol id="icon-stop" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3" fill="currentColor" stroke="none"/></symbol>
+      <symbol id="icon-mail" viewBox="0 0 24 24"><path d="M4 6h16v12H4z"/><path d="m4 7 8 6 8-6"/></symbol>
+      <symbol id="icon-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+      <symbol id="icon-read" viewBox="0 0 24 24"><path d="m2 13 4 4L16 7m-6 8 2 2L22 7"/></symbol>
+      <symbol id="icon-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+      <symbol id="icon-branch" viewBox="0 0 24 24"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="8" r="2"/><path d="M6 7v10m12-7c0 4-6 3-12 7"/></symbol>
+      <symbol id="icon-arrow" viewBox="0 0 24 24"><path d="M7 17 17 7M8 7h9v9"/></symbol>
+      <symbol id="icon-alert" viewBox="0 0 24 24"><path d="M12 8v5m0 3v.01"/><circle cx="12" cy="12" r="9"/></symbol>
+      <symbol id="icon-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+      <symbol id="icon-star" viewBox="0 0 24 24"><path d="m12 3 2.8 5.7 6.3.9-4.6 4.4 1.1 6.3-5.6-3-5.6 3 1.1-6.3L2.9 9.6l6.3-.9Z"/></symbol>
+    </defs>
+  </svg>
+  <main class="csd-wrap">
+    <header class="csd-header">
+      <div class="csd-brand">
+        <div class="csd-logo"><svg class="csd-icon" aria-hidden="true"><use href="#icon-code"/></svg></div>
+        <div><h1 class="csd-title">Agent Sessions</h1><p id="today" class="csd-sub">Today's activity + saved favorites · archived hidden</p></div>
+      </div>
+      <div class="csd-live" aria-live="off">
+        <svg class="csd-ring" width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="8" fill="none" stroke="#262A33" stroke-width="3"/><circle id="refresh-ring" cx="11" cy="11" r="8" fill="none" stroke-width="3" stroke-linecap="round"/></svg>
+        <div class="csd-live-text"><span id="connection-label" class="csd-live-label is-error"><span class="csd-live-dot"></span><span id="connection">Connecting</span></span><span id="countdown" class="csd-live-sub">Auto-refresh every 3s</span></div>
+      </div>
+    </header>
+    <div id="error" class="csd-error" role="status" hidden></div>
+    <div id="action-error" class="csd-error csd-action-error" role="alert" hidden><span></span><button type="button" aria-label="Dismiss archive error">Dismiss</button></div>
+    <section aria-label="Status overview">
+      <div id="tiles" class="csd-tiles"></div>
+      <div class="csd-dist"><div id="distribution" class="csd-dist-bar" role="img" aria-label="Loading status totals"></div><div id="legend" class="csd-dist-legend"></div></div>
+    </section>
+    <section class="csd-filters" aria-label="Filters">
+      <div class="csd-scope-row"><div id="sources" class="csd-chips" aria-label="Filter by source"></div><button id="favorites" type="button" class="csd-chip csd-favorites-view" aria-pressed="false"><svg class="csd-icon" aria-hidden="true"><use href="#icon-star"/></svg>Favorites<span id="favorite-count" class="csd-chip-count">0</span></button></div>
+      <div class="csd-row">
+        <label class="csd-search"><svg class="csd-icon" aria-hidden="true"><use href="#icon-search"/></svg><input id="search" type="search" placeholder="Search by title, project, branch or ID" aria-label="Search sessions"><kbd>/</kbd></label>
+        <label class="csd-sr" for="kind">Session type</label><select id="kind" class="csd-ghost"><option value="">All types</option><option>Chat</option><option>Scheduled</option></select>
+        <button id="clear-filters" type="button" class="csd-ghost" hidden>Clear filters</button>
+      </div>
+      <div class="csd-projects"><span class="csd-chips-label">Project</span><div id="projects" class="csd-chips" aria-label="Filter by project"></div></div>
+    </section>
+    <div class="csd-results-head"><h2 id="results">Today's sessions</h2><span>Running first, then unread, then most recent</span></div>
+    <section id="board" class="csd-grid" aria-label="Today's sessions and saved favorites" aria-busy="true"><div class="csd-empty">Connecting to your sessions...</div></section>
+    <footer class="csd-page-footer"><span id="scope-label">This device · Today + Favorites</span><span id="updated">Waiting for first update</span></footer>
+  </main>
+  <div id="toast" class="csd-toast" role="status" hidden></div>
+  <template id="tile-template"><button type="button" class="csd-tile" aria-pressed="false"><span class="csd-tile-top"><span class="csd-tile-icon"></span><span class="csd-tile-flag" hidden>Filtering</span></span><span class="csd-tile-count"><span class="csd-tile-num">0</span><span class="csd-tile-label"></span></span></button></template>
+  <template id="session-template">
+    <article class="csd-card">
+      <a class="csd-card-link" data-open href="#">
+      <span class="csd-progress" aria-hidden="true" hidden><span></span></span>
+      <span class="csd-card-top"><span class="csd-status"><span class="csd-status-icon"></span><span class="csd-status-label"></span><span class="csd-status-dur" title="Latest run duration"></span></span><span class="csd-unread" hidden>Unread</span><span class="csd-read" hidden><svg class="csd-icon" aria-hidden="true"><use href="#icon-read"/></svg>Read</span></span>
+      <div class="csd-card-heading"><h3 class="csd-card-title"></h3><span class="csd-source"><span class="source-icon"></span><span class="source-name"></span></span></div>
+      <div class="csd-meta"><span class="csd-project"><span class="csd-project-dot" aria-hidden="true"></span><span class="project-name"></span></span><span class="csd-branch"><svg class="csd-icon" aria-hidden="true"><use href="#icon-branch"/></svg><span class="branch-name"></span></span></div>
+      <div class="csd-footer"><span class="csd-id"><span class="csd-id-swatch" aria-hidden="true"></span><span class="csd-id-text"><span class="csd-mono session-id"></span><span class="activity"></span></span></span></div>
+      </a>
+      <div class="csd-actions"><a class="csd-open" data-open href="#"><span class="open-label"></span><svg class="csd-icon" aria-hidden="true"><use href="#icon-arrow"/></svg></a><button class="csd-favorite" type="button" aria-pressed="false"><svg class="csd-icon" aria-hidden="true"><use href="#icon-star"/></svg></button><button class="csd-archive" type="button"><svg class="csd-icon" aria-hidden="true"><use href="#icon-archive"/></svg><span>Archive</span></button></div>
+    </article>
+  </template>
+</body>
+</html>
