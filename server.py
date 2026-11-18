@@ -294,7 +294,7 @@ class Snapshot:
                     for key in ("sessions", "favoriteSessions")}}
         # Hiding active work must not stop it; source failures never undo the local archive.
         source = session["source"]
-        if source not in ("codex", "claude") or (source == "claude" and sys.platform == "win32"):
+        if source not in ("codex", "claude"):
             self.track("source_archive_result", source=source, result="unsupported")
         elif session.get("running") or session.get("agents"):
             self.track("source_archive_result", source=source, result="skipped_running")
