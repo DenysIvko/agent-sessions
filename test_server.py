@@ -1,4 +1,5 @@
 import json
+from contextlib import closing
 from datetime import datetime
 from pathlib import Path
 import sqlite3
@@ -111,14 +112,14 @@ class SessionsTest(unittest.TestCase):
             self.assertEqual(sessions['running']['startedAt'], now - 5)
             self.assertEqual(sessions['running']['endedAt'], now)
             self.assertEqual(sessions['running']['turnId'], 'new-turn')
-            with sqlite3.connect(root / 'state_5.sqlite') as db:
+            with closing(sqlite3.connect(root / 'state_5.sqlite')) as db, db:
                 db.execute("UPDATE thread_read_receipts SET first_unread_turn=NULL WHERE thread_id='running'")
             after_read = {s['id']: s for s in read_sessions(root, {'running'}, now)['sessions']}
             self.assertIn('running', after_read)
             self.assertFalse(after_read['running']['running'])
             self.assertFalse(after_read['running']['unread'])
             self.assertEqual(after_read['running']['status'], 'completed')
-            with sqlite3.connect(root / 'state_5.sqlite') as db:
+            with closing(sqlite3.connect(root / 'state_5.sqlite')) as db, db:
                 db.execute("UPDATE projects SET name='Renamed project' WHERE id='native-project'")
             renamed = {s['id']: s for s in read_sessions(root, set(), now)['sessions']}
             self.assertEqual(renamed['read']['project'], 'Renamed project')

@@ -49,7 +49,7 @@ jobs:
         if: runner.os == 'Windows'
         env:
           QT_QPA_PLATFORM: offscreen
-        run: python windows/check_ui.py
+        run: python windows/check_ui.py --screenshot dist/tray.png
       - name: Build Windows installer
         if: runner.os == 'Windows'
         shell: pwsh

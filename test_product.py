@@ -1,4 +1,5 @@
 import json
+from contextlib import closing
 from pathlib import Path
 import sqlite3
 import tempfile
@@ -17,7 +18,7 @@ class AntigravityTest(unittest.TestCase):
     def test_local_summary_tracks_activity_runs_archives_and_saved_favorites(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            with sqlite3.connect(root / 'conversation_summaries.db') as connection:
+            with closing(sqlite3.connect(root / 'conversation_summaries.db')) as connection, connection:
                 connection.executescript('''
                     CREATE TABLE conversation_summaries (conversation_id TEXT, title TEXT, step_count INTEGER,
                     last_modified_time TEXT, workspace_uris TEXT, status TEXT, project_id TEXT,
@@ -36,11 +37,11 @@ class AntigravityTest(unittest.TestCase):
             self.assertEqual(row['resumeCommand'], f'agy --conversation {SID}')
             self.assertEqual(read_sessions(now + 86400, root, live=False), [])
             self.assertEqual(len(read_sessions(now + 86400, root, [row['id']], live=False)), 1)
-            with sqlite3.connect(root / 'conversation_summaries.db') as connection:
+            with closing(sqlite3.connect(root / 'conversation_summaries.db')) as connection, connection:
                 connection.execute("UPDATE conversation_summaries SET status='CASCADE_RUN_STATUS_RUNNING',not_fully_idle=1")
             self.assertTrue(read_sessions(now + 86400, root, live=True)[0]['running'])
             self.assertIsNone(read_sessions(now, root, live=False)[0]['status'])
-            with sqlite3.connect(root / 'conversation_summaries.db') as connection:
+            with closing(sqlite3.connect(root / 'conversation_summaries.db')) as connection, connection:
                 connection.execute('INSERT INTO conversations_fts VALUES (?,1)', (SID,))
             self.assertEqual(read_sessions(now, root, [row['id']], live=True), [])
 
