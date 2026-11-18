@@ -1,0 +1,75 @@
+name: Build and test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            target: macOS-arm64
+          - os: macos-15-intel
+            target: macOS-x64
+          - os: windows-latest
+            target: Windows-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install build dependencies
+        run: python -m pip install -r requirements-build.txt
+      - name: Install Windows UI dependencies
+        if: runner.os == 'Windows'
+        run: python -m pip install -r requirements-windows.txt
+      - name: Test Python readers, actions, updates and completion tracking
+        run: python -m unittest discover -v
+      - name: Test dashboard behavior
+        run: node --test test_colors.mjs test_sessions.mjs
+      - name: Build Mac installer and verify native UI logic
+        if: runner.os == 'macOS'
+        run: python scripts/package_macos.py
+      - name: Smoke test bundled Mac runtime
+        if: runner.os == 'macOS'
+        run: python scripts/check_macos_package.py
+      - name: Build Windows executable
+        if: runner.os == 'Windows'
+        run: python scripts/package_windows.py
+      - name: Verify Windows UI
+        if: runner.os == 'Windows'
+        env:
+          QT_QPA_PLATFORM: offscreen
+        shell: pwsh
+        run: |
+          $env:QT_QPA_FONTDIR = Join-Path $env:SystemRoot "Fonts"
+          python windows/check_ui.py --screenshot dist/tray.png
+      - name: Build Windows installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: '& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" windows\installer.iss'
+      - name: Smoke test Windows installation
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $installDir = Join-Path $env:RUNNER_TEMP 'agent-sessions-installed'
+          Start-Process -FilePath dist\Agent-Sessions-Windows-x64-Setup.exe -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', "/DIR=$installDir" -Wait
+          if (!(Test-Path "$installDir\AgentSessions.exe")) { throw 'Installer did not create the executable' }
+          Start-Process -FilePath "$installDir\unins000.exe" -ArgumentList '/VERYSILENT' -Wait
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Agent-Sessions-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error

@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agent Sessions - One place for your coding agents</title>
+  <meta name="description" content="A local-first dashboard and desktop tray for Codex, Claude Code, and Antigravity. Follow running sessions, keep favorites, and know when work is ready.">
+  <meta property="og:title" content="Agent Sessions - Your coding agents, in one quiet place.">
+  <meta property="og:description" content="Follow Codex, Claude Code, and Antigravity in a local dashboard and desktop tray. Free and open source.">
+  <meta property="og:image" content="https://denysivko.github.io/agent-sessions/assets/dashboard.jpg">
+  <meta property="og:type" content="website">
+  <meta name="theme-color" content="#101318">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <nav class="nav wrap" aria-label="Main navigation">
+    <a href="#" class="brand"><img src="assets/favicon.svg" alt="" width="28" height="28">Agent Sessions<span class="preview">PREVIEW</span></a>
+    <div><a href="#how">How it works</a><a href="#install">Install</a><a href="https://github.com/DenysIvko/agent-sessions">GitHub <span aria-hidden="true">↗</span></a></div>
+  </nav>
+  <main>
+    <section class="hero wrap">
+      <p class="eyebrow"><span class="live-dot"></span> CODEX · CLAUDE CODE · ANTIGRAVITY</p>
+      <h1>Your agents are busy.<br><span>You can breathe.</span></h1>
+      <p class="intro">One quiet place to see what's running, what's ready,<br class="desktop"> and what you want to come back to.</p>
+      <div class="hero-actions"><a class="button primary" href="#install">Get Agent Sessions <span aria-hidden="true">↓</span></a><a class="text-link" href="https://github.com/DenysIvko/agent-sessions">Explore the source <span aria-hidden="true">↗</span></a></div>
+      <p class="micro">macOS & Windows · Free and open source · No account required</p>
+      <div class="product-frame"><div class="window-bar"><span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span><span>YOUR WORK, AT A GLANCE</span><span class="local">● LOCAL ONLY</span></div><img src="assets/dashboard.jpg" width="1512" height="1043" alt="Agent Sessions dashboard showing six fictional sessions across Codex, Claude Code, and Antigravity, with running indicators, favorites and project labels"></div>
+      <p class="caption">The real dashboard, with fictional demo sessions.</p>
+    </section>
+    <section class="focus wrap" id="how">
+      <div class="section-copy"><p class="eyebrow">LESS CHECKING. MORE CONTEXT.</p><h2>A small tray.<br>A clearer head.</h2><p>Keep the compact panel close. Open the full dashboard when you want the bigger picture.</p><ol class="features"><li><span>01</span><div><h3>Start with what needs you</h3><p>New shows running work and finished results awaiting review. All keeps the rest in reach.</p></div></li><li><span>02</span><div><h3>Keep your place</h3><p>Star a session and it stays across days. Archive it and it stays hidden here, even if the source app refuses.</p></div></li><li><span>03</span><div><h3>Let finished work find you</h3><p>A native notification tells you when a run finishes. The tray stays closed until you open it.</p></div></li></ol></div>
+      <figure class="tray-figure"><div class="tray-glow"></div><img src="assets/tray.png" width="470" height="610" loading="lazy" alt="Compact Agent Sessions tray with New, All and Favorites tabs, session source labels, stars and archive actions"><figcaption id="tray-caption">Compact Windows tray controls · fictional demo data</figcaption></figure>
+    </section>
+    <section class="privacy wrap"><div><p class="eyebrow">ON YOUR COMPUTER. UNDER YOUR CONTROL.</p><h2>Your sessions stay yours.</h2></div><p>Agent Sessions reads local session metadata. No cloud account, API key, telemetry, or transcript upload. The only built-in outbound request checks GitHub for app updates.</p></section>
+    <section class="install wrap" id="install">
+      <p class="eyebrow">FROM DOWNLOAD TO DASHBOARD</p><h2>Install. Open. Get back to work.</h2><p class="section-intro">The runtime is included. Just bring your coding agents.</p>
+      <div class="downloads">
+        <article><div class="platform-label"><span aria-hidden="true">⌘</span><h3>macOS</h3></div><p>macOS 13 or later</p><a class="button primary download" data-asset="Agent-Sessions-macOS-arm64.dmg" href="https://github.com/DenysIvko/agent-sessions/releases">Apple Silicon <span aria-hidden="true">↓</span></a><a class="button secondary download" data-asset="Agent-Sessions-macOS-x64.dmg" href="https://github.com/DenysIvko/agent-sessions/releases">Intel Mac <span aria-hidden="true">↓</span></a><ol><li>Open the disk image.</li><li>Drag Agent Sessions to Applications.</li><li>Launch it and click the menu bar icon.</li></ol></article>
+        <article><div class="platform-label"><span aria-hidden="true">⊞</span><h3>Windows</h3></div><p>Windows 10 / 11 · x64</p><a class="button primary download" data-asset="Agent-Sessions-Windows-x64-Setup.exe" href="https://github.com/DenysIvko/agent-sessions/releases">Download for Windows <span aria-hidden="true">↓</span></a><p class="windows-note">A per-user installer.<br>No administrator access needed.</p><ol><li>Run the setup file.</li><li>Launch Agent Sessions.</li><li>Find the icon in your system tray.</li></ol></article>
+      </div>
+      <div class="release-note"><strong id="release-status">First release in preparation.</strong> <span id="release-detail">Download links lead to the release page until installers are published.</span><p>Initial builds are unsigned previews. Your OS may display an unknown-publisher warning. Review the release notes and checksums before installing. App updates are suggested automatically; you choose when to download and install.</p></div>
+    </section>
+    <section class="faq wrap"><h2>A few useful details.</h2><div>
+      <details><summary>Which sessions can it see?</summary><p>Local Codex desktop sessions, Claude Code CLI and desktop metadata, and Antigravity App 2.x's local summary index. Today's activity uses your local timezone. Favorites remain visible across days. Remote hosts, WSL sessions, and older protobuf-only Antigravity IDE storage are not scanned.</p></details>
+      <details><summary>Does archiving stop a running agent?</summary><p>No. Running sessions are hidden locally while work continues. For idle sessions, source archival is attempted where supported. Local hiding always persists independently, including in Favorites.</p></details>
+      <details><summary>How do I return to a session?</summary><p>Codex and Claude open through their app links. Antigravity copies its official CLI resume command for you to paste in a terminal. The tray tracks reviewed results locally where the source has no read receipt.</p></details>
+      <details><summary>How do updates work?</summary><p>The app checks stable GitHub releases on startup and every six hours. When a newer version has a matching installer, a notification and tray menu action offer the download. Reinstalling preserves your favorites and local archives.</p></details>
+      <details><summary>Can I build it myself?</summary><p>Yes. All source, tests, packaging scripts, and release workflows are on <a href="https://github.com/DenysIvko/agent-sessions">GitHub</a> under the MIT license. Dependencies retain their own licenses.</p></details>
+    </div></section>
+  </main>
+  <footer class="wrap"><a class="brand" href="#"><img src="assets/favicon.svg" alt="" width="24" height="24">Agent Sessions</a><p>An independent community project.<br>Not affiliated with OpenAI, Anthropic, or Google.</p><div><a href="https://github.com/DenysIvko/agent-sessions#readme">Documentation</a><a href="https://github.com/DenysIvko/agent-sessions/issues">Feedback</a><a href="https://github.com/DenysIvko/agent-sessions/blob/main/LICENSE">MIT license</a></div></footer>
+</body>
+</html>
