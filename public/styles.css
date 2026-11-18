@@ -25,6 +25,7 @@
 
 /* Header */
 .csd-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; }
+.csd-header-actions { display: flex; align-items: center; gap: 10px; }
 .csd-brand { display: flex; align-items: center; gap: 14px; }
 .csd-logo { width: 44px; height: 44px; border-radius: 12px; background: var(--csd-text); color: var(--csd-bg); display: flex; align-items: center; justify-content: center; }
 .csd-title { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
@@ -184,6 +185,18 @@
 .csd-empty { grid-column: 1 / -1; align-self: stretch; justify-content: center; }
 .csd-empty .csd-icon { width: 32px; height: 32px; }
 .csd-toast { max-width: calc(100vw - 32px); overflow-wrap: anywhere; }
+.csd-tutorial { width: min(580px, calc(100vw - 28px)); max-height: calc(100dvh - 28px); padding: 24px; border: 1px solid var(--csd-border-strong); border-radius: 18px; background: var(--csd-surface); color: var(--csd-text); box-shadow: 0 24px 80px #0008; }
+.csd-tutorial::backdrop { background: #080a10b8; }
+.csd-tutorial-header, .csd-tutorial-nav { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.csd-tutorial-header h2 { margin: 0; font-size: 18px; }
+.csd-tutorial > .csd-sub { margin-top: 18px; }
+.csd-tutorial-body { margin: 20px 0 24px; line-height: 1.65; font-size: 14px; }
+.csd-tutorial h3 { margin: 0 0 14px; font-size: 23px; line-height: 1.3; }
+.csd-tutorial h3:focus { outline: none; }
+.csd-tutorial p { color: var(--csd-text-2); }
+.csd-tutorial strong { color: var(--csd-text); }
+.csd-tutorial button:disabled { opacity: .35; cursor: default; }
+#tutorial-next { background: #a1e1d2; color: #101318 !important; border-color: transparent; min-width: 90px; }
 .csd-card-link { display: flex; flex: 1; flex-direction: column; gap: 8px; min-width: 0; color: inherit; text-decoration: none; border-radius: 8px; }
 .csd-card-link:focus-visible, .csd-open:focus-visible, .csd-archive:focus-visible { outline: 2px solid var(--source-color); outline-offset: 3px; }
 .csd-card:hover, .csd-card:focus-within { border-color: var(--source-color); background: color-mix(in srgb, var(--source-color) 7%, var(--csd-card)); }

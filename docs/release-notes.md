@@ -1,10 +1,11 @@
-Agent Sessions brings Codex, Claude Code, and Antigravity activity into a local dashboard and desktop tray.
+Agent Sessions 0.2.0 makes installation and learning the interface easier.
 
-- New, All, and Favorites tabs; running sessions appear in New.
-- Stable session/project colors, automatic refresh, completion notifications.
-- Favorites across days and persistent local archive, including silent source failures.
-- Self-contained macOS Apple Silicon and Intel disk images, and a Windows x64 installer.
-- GitHub release checks with update notifications and manual installer downloads.
+- Copy a ready-to-use installation prompt from the top of the README into your coding agent.
+- A dismissible first-visit tour explains the dashboard and desktop tray, including filters, session actions, notifications and updates.
+- Replay the tour from Help in the dashboard or either tray, or Quick Tour in the tray menu.
+- Hover the main controls for short hints. Tutorial completion is saved in your browser; session data is unchanged.
+
+Existing favorites, archives and review state are preserved. The tour is bundled locally and adds no external services or dependencies.
 
 These are unsigned preview builds. They are not notarized by Apple or signed with a trusted Windows publisher certificate. OS security warnings may appear. Checksums are provided in SHA256SUMS.txt.
 

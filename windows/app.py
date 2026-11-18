@@ -50,6 +50,7 @@ class Spinner(QWidget):
         self.setFixedSize(18, 18)
         self.angle = 0
         self.setAccessibleName("Running")
+        self.setToolTip("This session is still running")
         timer = QTimer(self)
         timer.timeout.connect(self.tick)
         timer.start(50)
@@ -126,14 +127,17 @@ class TrayWindow(QWidget):
         header.addWidget(heading)
         header.addStretch()
         web = QPushButton("Open Web Dashboard")
+        web.setToolTip("Open the full dashboard with source, project and status filters")
         web.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(BASE)))
         header.addWidget(web)
         layout.addLayout(header)
         self.summary = QLabel("Connecting...")
         layout.addWidget(self.summary)
         self.tabs = QTabBar()
-        for title in ("New", "All", "Favorites"):
-            self.tabs.addTab(title)
+        for title, hint in [("New", "Running work and results awaiting review"),
+                            ("All", "Today's activity plus saved favorites"),
+                            ("Favorites", "Starred sessions across all days")]:
+            self.tabs.setTabToolTip(self.tabs.addTab(title), hint)
         self.tabs.setExpanding(True)
         self.tabs.setAccessibleName("Session view")
         self.tabs.currentChanged.connect(self.render)
@@ -141,6 +145,7 @@ class TrayWindow(QWidget):
         self.search = QLineEdit()
         self.search.setPlaceholderText("Search sessions")
         self.search.setAccessibleName("Search sessions")
+        self.search.setToolTip("Search the selected tab by title, project, source, branch or ID")
         self.search.textChanged.connect(self.render)
         layout.addWidget(self.search)
         self.scroll = QScrollArea()
@@ -148,7 +153,13 @@ class TrayWindow(QWidget):
         layout.addWidget(self.scroll)
         self.footer = QLabel(POLL_STATUS)
         self.footer.setWordWrap(True)
-        layout.addWidget(self.footer)
+        bottom = QHBoxLayout()
+        bottom.addWidget(self.footer, 1)
+        help_button = QPushButton("Help")
+        help_button.setToolTip("Open the quick tour of the tray and dashboard")
+        help_button.clicked.connect(self.open_tutorial)
+        bottom.addWidget(help_button)
+        layout.addLayout(bottom)
         self.tray = QSystemTrayIcon(icon(), self)
         self.tray.setToolTip("Agent Sessions")
         self.tray.activated.connect(self.activated)
@@ -156,6 +167,7 @@ class TrayWindow(QWidget):
         menu = QMenu()
         menu.addAction("Show Sessions", self.show_new)
         menu.addAction("Open Web Dashboard", lambda: QDesktopServices.openUrl(QUrl(BASE)))
+        menu.addAction("Quick Tour", self.open_tutorial)
         notifications = QAction("Completion notifications", menu)
         notifications.setCheckable(True)
         notifications.setChecked(self.settings.value("notifications", True, bool))
@@ -250,7 +262,8 @@ class TrayWindow(QWidget):
             details = QVBoxLayout()
             title = QPushButton(session['title'])
             title.setStyleSheet("text-align: left; font-weight: 600")
-            title.setToolTip(session['title'] + '\n' + SOURCES[session['source']])
+            action = f"Open in {SOURCES[session['source']]}" if session.get('url') else "Copy resume command to paste in your terminal"
+            title.setToolTip(session['title'] + '\n' + action)
             title.clicked.connect(lambda checked=False, s=session: self.open_session(s))
             details.addWidget(title)
             subtitle = QLabel(f"{SOURCES[session['source']]} · {session['project']}")
@@ -260,6 +273,9 @@ class TrayWindow(QWidget):
             for text, label, endpoint in [("★" if session.get('favorite') else "☆", "Favorite", '/api/favorite'), ("Archive", "Archive", '/api/archive')]:
                 button = QPushButton(text)
                 button.setAccessibleName(f"{label} {session['title']}")
+                button.setToolTip(("Remove from favorites" if session.get('favorite') else "Keep in favorites across days")
+                                  if endpoint == '/api/favorite' else
+                                  "Hide from Agent Sessions, even if source archival fails. Running work continues.")
                 button.setEnabled(session['id'] not in self.pending_actions)
                 button.clicked.connect(lambda checked=False, s=session, e=endpoint: self.action(s, e))
                 line.addWidget(button)
@@ -300,6 +316,10 @@ class TrayWindow(QWidget):
         self.monitor.mark_reviewed(session)
         self.save_reviews()
         self.render()
+
+    def open_tutorial(self):
+        QDesktopServices.openUrl(QUrl(BASE + '/?tutorial=1'))
+        self.hide()
 
     def update_menu_clicked(self):
         if self.update_info:

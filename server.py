@@ -309,7 +309,7 @@ class Handler(BaseHTTPRequestHandler):
         origin = self.headers.get("Origin")
         # The public HTML shell can be opened from another app or website.
         # Session data and mutations still require a same-origin request.
-        navigation = (self.command == "GET" and self.path == "/"
+        navigation = (self.command == "GET" and urlsplit(self.path).path == "/"
                       and self.headers.get("Sec-Fetch-Mode") == "navigate"
                       and self.headers.get("Sec-Fetch-Dest") == "document")
         if host not in allowed or (self.headers.get("Sec-Fetch-Site") == "cross-site" and not navigation) or (
@@ -369,7 +369,7 @@ class Handler(BaseHTTPRequestHandler):
             with self.server.snapshot.lock:
                 body = json.dumps(self.server.snapshot.data).encode()
             content_type = "application/json"
-        elif path in ("/", "/app.js", "/styles.css", "/favicon.svg", "/colors.mjs", "/sessions.mjs",
+        elif path in ("/", "/app.js", "/styles.css", "/favicon.svg", "/colors.mjs", "/sessions.mjs", "/tutorial.mjs",
                       "/vendor/color-hash-2.0.2/color-hash.mjs"):
             file = ROOT / "public" / ("index.html" if path == "/" else path[1:])
             body = file.read_bytes()

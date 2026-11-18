@@ -70,6 +70,7 @@ private final class SessionCell: NSTableCellView {
         spinner.isDisplayedWhenStopped = false
         spinner.translatesAutoresizingMaskIntoConstraints = false
         spinner.setAccessibilityLabel("Running")
+        spinner.toolTip = "This session is still running"
         favorite.bezelStyle = .recessed
         favorite.isBordered = false
         favorite.target = self
@@ -119,7 +120,7 @@ private final class SessionCell: NSTableCellView {
         favorite.setAccessibilityLabel("\(flagged ? "Unfavorite" : "Favorite") \(session.title)")
         favorite.isEnabled = true
         archive.isEnabled = true
-        archive.toolTip = "Archive in Agent Sessions"
+        archive.toolTip = "Hide from Agent Sessions, even if source archival fails. Running work continues."
         archive.setAccessibilityLabel("Archive \(session.title)")
         title.stringValue = session.title
         avatar.image = NSImage(systemSymbolName: session.source == "claude" ? "asterisk" : "chevron.left.forwardslash.chevron.right", accessibilityDescription: session.sourceName)
@@ -155,6 +156,7 @@ final class TrayViewController: NSViewController, NSTableViewDataSource, NSTable
     var onFavoriteSession: ((AgentSession) -> Void)?
     var onMarkReviewed: ((AgentSession) -> Void)?
     var onOpenWeb: (() -> Void)?
+    var onHelp: (() -> Void)?
     var onNotifications: ((NSButton) -> Void)?
     private let summary = NSTextField(labelWithString: "Connecting...")
     private let tabs = NSSegmentedControl(labels: ["New", "All", "Favorites"], trackingMode: .selectOne, target: nil, action: nil)
@@ -186,6 +188,7 @@ final class TrayViewController: NSViewController, NSTableViewDataSource, NSTable
         web.font = .systemFont(ofSize: 11)
         web.image = NSImage(systemSymbolName: "arrow.up.right", accessibilityDescription: nil)
         web.imagePosition = .imageTrailing
+        web.toolTip = "Open the full dashboard with source, project and status filters"
         let spacer = NSView()
         let header = NSStackView(views: [heading, spacer, web])
         header.spacing = 8
@@ -196,10 +199,14 @@ final class TrayViewController: NSViewController, NSTableViewDataSource, NSTable
         tabs.action = #selector(tabChanged)
         tabs.segmentStyle = .rounded
         tabs.setAccessibilityLabel("Session view")
+        for (index, hint) in ["Running work and results awaiting review", "Today's activity plus saved favorites", "Starred sessions across all days"].enumerated() {
+            tabs.setToolTip(hint, forSegment: index)
+        }
         search.placeholderString = "Search sessions"
         search.delegate = self
         search.controlSize = .small
         search.setAccessibilityLabel("Search sessions")
+        search.toolTip = "Search the selected tab by title, project, source, branch or ID"
         let top = NSStackView(views: [header, summary, tabs, search])
         top.orientation = .vertical
         top.alignment = .leading
@@ -241,7 +248,11 @@ final class TrayViewController: NSViewController, NSTableViewDataSource, NSTable
         notificationsButton.bezelStyle = .recessed
         notificationsButton.font = .systemFont(ofSize: 10)
         notificationsButton.image = NSImage(systemSymbolName: "bell", accessibilityDescription: nil)
-        let bottom = NSStackView(views: [footer, NSView(), notificationsButton])
+        let help = NSButton(title: "Help", target: self, action: #selector(openHelp))
+        help.bezelStyle = .recessed
+        help.font = .systemFont(ofSize: 10)
+        help.toolTip = "Open the quick tour of the tray and dashboard"
+        let bottom = NSStackView(views: [footer, NSView(), help, notificationsButton])
         bottom.translatesAutoresizingMaskIntoConstraints = false
         root.addSubview(bottom)
         let divider = NSBox()
@@ -327,6 +338,7 @@ final class TrayViewController: NSViewController, NSTableViewDataSource, NSTable
     func controlTextDidChange(_ obj: Notification) { render() }
     @objc private func tabChanged() { render() }
     @objc private func openWeb() { onOpenWeb?() }
+    @objc private func openHelp() { onHelp?() }
     @objc private func notificationOptions() { onNotifications?(notificationsButton) }
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()

@@ -36,10 +36,10 @@
         <div class="csd-logo"><svg class="csd-icon" aria-hidden="true"><use href="#icon-code"/></svg></div>
         <div><h1 class="csd-title">Agent Sessions</h1><p id="today" class="csd-sub">Today's activity + saved favorites · archived hidden</p></div>
       </div>
-      <div class="csd-live" aria-live="off">
+      <div class="csd-header-actions"><button id="help" type="button" class="csd-ghost" title="Replay the quick tour of the dashboard and tray">Help</button><div class="csd-live" aria-live="off" title="Session activity refreshes automatically every 3 seconds. No manual refresh is needed.">
         <svg class="csd-ring" width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="8" fill="none" stroke="#262A33" stroke-width="3"/><circle id="refresh-ring" cx="11" cy="11" r="8" fill="none" stroke-width="3" stroke-linecap="round"/></svg>
         <div class="csd-live-text"><span id="connection-label" class="csd-live-label is-error"><span class="csd-live-dot"></span><span id="connection">Connecting</span></span><span id="countdown" class="csd-live-sub">Auto-refresh every 3s</span></div>
-      </div>
+      </div></div>
     </header>
     <div id="error" class="csd-error" role="status" hidden></div>
     <div id="action-error" class="csd-error csd-action-error" role="alert" hidden><span></span><button type="button" aria-label="Dismiss archive error">Dismiss</button></div>
@@ -48,11 +48,11 @@
       <div class="csd-dist"><div id="distribution" class="csd-dist-bar" role="img" aria-label="Loading status totals"></div><div id="legend" class="csd-dist-legend"></div></div>
     </section>
     <section class="csd-filters" aria-label="Filters">
-      <div class="csd-scope-row"><div id="sources" class="csd-chips" aria-label="Filter by source"></div><button id="favorites" type="button" class="csd-chip csd-favorites-view" aria-pressed="false"><svg class="csd-icon" aria-hidden="true"><use href="#icon-star"/></svg>Favorites<span id="favorite-count" class="csd-chip-count">0</span></button></div>
+      <div class="csd-scope-row"><div id="sources" class="csd-chips" aria-label="Filter by source"></div><button id="favorites" type="button" class="csd-chip csd-favorites-view" aria-pressed="false" title="Show only starred sessions, including earlier days"><svg class="csd-icon" aria-hidden="true"><use href="#icon-star"/></svg>Favorites<span id="favorite-count" class="csd-chip-count">0</span></button></div>
       <div class="csd-row">
-        <label class="csd-search"><svg class="csd-icon" aria-hidden="true"><use href="#icon-search"/></svg><input id="search" type="search" placeholder="Search by title, project, branch or ID" aria-label="Search sessions"><kbd>/</kbd></label>
-        <label class="csd-sr" for="kind">Session type</label><select id="kind" class="csd-ghost"><option value="">All types</option><option>Chat</option><option>Scheduled</option></select>
-        <button id="clear-filters" type="button" class="csd-ghost" hidden>Clear filters</button>
+        <label class="csd-search"><svg class="csd-icon" aria-hidden="true"><use href="#icon-search"/></svg><input id="search" type="search" placeholder="Search by title, project, branch or ID" aria-label="Search sessions" title="Search within your filters. Press / to focus, or Escape to clear the search."><kbd>/</kbd></label>
+        <label class="csd-sr" for="kind">Session type</label><select id="kind" class="csd-ghost" title="Filter by regular chats or scheduled sessions"><option value="">All types</option><option>Chat</option><option>Scheduled</option></select>
+        <button id="clear-filters" type="button" class="csd-ghost" title="Reset search, source, status, project and type filters" hidden>Clear filters</button>
       </div>
       <div class="csd-projects"><span class="csd-chips-label">Project</span><div id="projects" class="csd-chips" aria-label="Filter by project"></div></div>
     </section>
@@ -60,6 +60,55 @@
     <section id="board" class="csd-grid" aria-label="Today's sessions and saved favorites" aria-busy="true"><div class="csd-empty">Connecting to your sessions...</div></section>
     <footer class="csd-page-footer"><span id="scope-label">This device · Today + Favorites</span><span id="updated">Waiting for first update</span></footer>
   </main>
+  <dialog id="tutorial" class="csd-tutorial" aria-labelledby="tutorial-title">
+    <header class="csd-tutorial-header"><h2 id="tutorial-title">Quick tour</h2><button id="tutorial-close" type="button" class="csd-ghost">Close tour</button></header>
+    <p id="tutorial-progress" class="csd-sub"></p>
+    <div class="csd-tutorial-body">
+      <section data-tour-step>
+        <h3 tabindex="-1">Your agents, at a glance</h3>
+        <p>This dashboard shows sessions with activity today in your local timezone, plus saved favorites from earlier days. Archived sessions stay hidden.</p>
+        <p>The live indicator and countdown show automatic refresh every 3 seconds. A warning means a source is unavailable; its last successful update stays visible.</p>
+        <p>Browse this guide without changing any sessions. Close it at any time, then use <strong>Help</strong> to return.</p>
+      </section>
+      <section data-tour-step hidden>
+        <h3 tabindex="-1">Check progress</h3>
+        <p>Click a status tile to filter the cards. Click it again to remove that filter. The bar underneath shows how the sessions are split by status.</p>
+        <p>A spinning icon means work is running. Completed, Stopped, Failed and Inactive describe different outcomes; inactive does not mean successful.</p>
+        <p>Read and Unread reflect the source's read state where available. Cards show the latest run duration and recent activity. Running work comes first, then unread results, then the most recent activity.</p>
+      </section>
+      <section data-tour-step hidden>
+        <h3 tabindex="-1">Find a session</h3>
+        <p>Use the source chips for Codex, Claude Code or Antigravity, the project chips for a workspace, and the type menu for Chat or Scheduled sessions.</p>
+        <p>Search by title, project, branch or ID. Press <kbd>/</kbd> to focus search, or <kbd>Escape</kbd> while searching to clear it.</p>
+        <p>Filters work together. <strong>Clear filters</strong> resets them. Counts on tiles and chips describe the full Today + Favorites collection, or your favorites when that view is selected.</p>
+      </section>
+      <section data-tour-step hidden>
+        <h3 tabindex="-1">Recognize and open a card</h3>
+        <p>The source badge names the agent app. The project label and branch show where the work belongs. Session and project colors come from their IDs, so they stay consistent after refresh.</p>
+        <p>Click a card or its <strong>Open</strong> button to return to Codex or the Claude desktop app. Those apps must be installed to handle the link.</p>
+        <p>For Antigravity, <strong>Copy resume command</strong> copies its conversation command. Paste it into your terminal with the Antigravity CLI installed. Hover an ID to see its full value.</p>
+      </section>
+      <section data-tour-step hidden>
+        <h3 tabindex="-1">Save it or clear it away</h3>
+        <p>Click the star to keep a session across days. <strong>Favorites</strong> shows only starred sessions. Remove the star when you no longer need the reminder.</p>
+        <p><strong>Archive</strong> hides a session from every Agent Sessions view, including Favorites, and persists after restart. It does not stop a running agent.</p>
+        <p>Source archival is best effort. Even if the source app refuses, the session stays hidden here. There is currently no Restore button in this client.</p>
+      </section>
+      <section data-tour-step hidden>
+        <h3 tabindex="-1">Use the compact tray</h3>
+        <p>Click the macOS menu bar icon or Windows system tray icon. <strong>New</strong> opens by default with running work and finished results awaiting review. <strong>All</strong> includes today's activity and saved favorites; <strong>Favorites</strong> keeps your starred sessions across days.</p>
+        <p>Search narrows the selected tab. Each row has a source, project, running indicator, star and archive action. Open a finished result to review it; on macOS you can also right-click a row to mark it reviewed.</p>
+        <p><strong>Open Web Dashboard</strong> returns to this larger view. <strong>Help</strong> reopens this guide.</p>
+      </section>
+      <section data-tour-step hidden>
+        <h3 tabindex="-1">Notifications and updates</h3>
+        <p>A completion sends an OS notification without opening the tray. Right-click the tray icon to toggle completion notifications. OS notification permissions and Focus or Do Not Disturb settings can affect visible banners.</p>
+        <p>On macOS, the <strong>Notifications</strong> button also opens options for a test notification and system settings.</p>
+        <p>The tray menu offers <strong>Check for Updates</strong>, or <strong>Download Update</strong> when a newer release is ready. Checks run automatically; downloading and installing are your choice. Reinstalling preserves favorites and archives. <strong>Quit</strong> stops this app, not your coding agents.</p>
+      </section>
+    </div>
+    <footer class="csd-tutorial-nav"><button id="tutorial-back" type="button" class="csd-ghost">Back</button><button id="tutorial-next" type="button" class="csd-ghost">Next</button></footer>
+  </dialog>
   <div id="toast" class="csd-toast" role="status" hidden></div>
   <template id="tile-template"><button type="button" class="csd-tile" aria-pressed="false"><span class="csd-tile-top"><span class="csd-tile-icon"></span><span class="csd-tile-flag" hidden>Filtering</span></span><span class="csd-tile-count"><span class="csd-tile-num">0</span><span class="csd-tile-label"></span></span></button></template>
   <template id="session-template">

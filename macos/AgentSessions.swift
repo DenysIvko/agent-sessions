@@ -56,6 +56,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         popover.behavior = .transient
         popover.animates = false
         dashboard.onOpenWeb = { [weak self] in self?.openBrowser() }
+        dashboard.onHelp = { [weak self] in self?.openTutorial() }
         dashboard.onNotifications = { [weak self] button in
             DispatchQueue.main.async { self?.showMenu(anchor: button) }
         }
@@ -117,6 +118,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         menu.addItem(.separator())
         addItem("Show Sessions", action: #selector(showDashboard), to: menu)
         addItem("Open Web Dashboard", action: #selector(openBrowser), to: menu)
+        addItem("Quick Tour", action: #selector(openTutorial), to: menu)
         menu.addItem(.separator())
         let enabled = addItem("Completion Notifications", action: #selector(toggleNotifications), to: menu)
         enabled.state = notificationsEnabled ? .on : .off
@@ -147,6 +149,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     @objc private func openBrowser() {
         popover.performClose(nil)
         NSWorkspace.shared.open(dashboardURL)
+    }
+
+    @objc private func openTutorial() {
+        NSWorkspace.shared.open(dashboardURL.appending(queryItems: [URLQueryItem(name: "tutorial", value: "1")]))
+        popover.performClose(nil)
     }
 
     private func openSession(_ session: AgentSession) {

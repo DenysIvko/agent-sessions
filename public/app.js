@@ -1,4 +1,5 @@
 import { identityColors } from './colors.mjs';
+import './tutorial.mjs';
 import { SOURCE_META, STATUS_META, dashboardSessions, projectGroup, sessionStatus, statusCounts, visibleSessions, formatDuration, runDuration } from './sessions.mjs';
 
 const $ = selector => document.querySelector(selector);
@@ -41,6 +42,7 @@ function renderSources() {
       button.type = 'button';
       button.className = 'csd-chip';
       button.dataset.source = key;
+      button.title = key ? `Filter sessions from ${meta.label}` : 'Show sessions from every source';
       setColors(button, meta.color, meta.bg);
       const count = document.createElement('span');
       count.className = 'csd-chip-count';
@@ -60,6 +62,7 @@ function renderOverview(counts) {
     if (!tile) {
       tile = $('#tile-template').content.firstElementChild.cloneNode(true);
       tile.dataset.filter = key;
+      tile.title = `Filter by ${meta.label.toLowerCase()}; click again to clear`;
       setColors(tile, meta.color, meta.bg);
       tile.querySelector('.csd-tile-icon').append(icon(meta.icon));
       tile.querySelector('.csd-tile-label').textContent = meta.label;
@@ -119,7 +122,7 @@ function syncProjects() {
       button.type = 'button';
       button.className = 'csd-chip';
       button.dataset.project = id;
-      button.title = id ? `${project.name} (${id})` : 'All projects';
+      button.title = id ? `Filter project: ${project.name} (${id})` : 'Show sessions from every project';
       const colors = identityColors('project', id);
       setColors(button, id ? colors.accent : '#E8EAEE', id ? colors.surface : 'rgb(232 234 238 / 10%)');
       const dot = document.createElement('span');
@@ -160,13 +163,13 @@ function updateCard(node, session, now) {
   }
   const action = session.url ? `Open in ${source.label}` : `Copy ${source.label} resume command`;
   node.querySelector('.open-label').textContent = action;
-  node.querySelector('.csd-open').title = session.source === 'claude' && !session.sessionId?.startsWith('local_')
+  node.querySelector('.csd-open').title = session.url && session.source === 'claude' && !session.sessionId?.startsWith('local_')
     ? 'Open this terminal conversation in the Claude Code desktop app' : action;
   const archive = node.querySelector('.csd-archive');
   archive.disabled = archiving.has(session.id);
   archive.querySelector('span').textContent = archiving.has(session.id) ? 'Archiving...' : 'Archive';
   archive.title = session.running || session.agents > 0 ? 'Hide from Agent Sessions while work continues'
-    : `Hide from Agent Sessions and try to archive in ${source.label}`;
+    : 'Hide from Agent Sessions; source archive is attempted where supported';
   archive.setAttribute('aria-label', `Archive ${session.title} in Agent Sessions`);
   const favorite = node.querySelector('.csd-favorite');
   favorite.disabled = savingFavorites.has(session.id);
@@ -430,7 +433,7 @@ $('#board').addEventListener('keydown', event => {
 $('#search').addEventListener('input', render);
 $('#kind').addEventListener('change', render);
 document.addEventListener('keydown', event => {
-  if (event.key === '/' && !['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
+  if (event.key === '/' && !$('#tutorial').open && !['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
     event.preventDefault();
     $('#search').focus();
   }
