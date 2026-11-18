@@ -52,7 +52,10 @@ jobs:
         if: runner.os == 'Windows'
         env:
           QT_QPA_PLATFORM: offscreen
-        run: python windows/check_ui.py --screenshot dist/tray.png
+        shell: pwsh
+        run: |
+          $env:QT_QPA_FONTDIR = Join-Path $env:SystemRoot "Fonts"
+          python windows/check_ui.py --screenshot dist/tray.png
       - name: Build Windows installer
         if: runner.os == 'Windows'
         shell: pwsh
