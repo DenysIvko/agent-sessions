@@ -4,16 +4,17 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+import threading
 from unittest.mock import patch
 
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from PySide6.QtCore import QSettings
+from PySide6.QtCore import QCoreApplication, QEvent, QSettings, QThreadPool
 from PySide6.QtWidgets import QApplication, QPushButton, QWidget
 from demo import snapshot
 from product_analytics import validate_event
-from windows.app import POLL_STATUS, RECONNECT_STATUS, TrayWindow
+from windows.app import POLL_STATUS, RECONNECT_STATUS, Signals, Task, TrayWindow
 
 app = QApplication.instance() or QApplication([])
 with tempfile.TemporaryDirectory() as directory:
@@ -169,3 +170,20 @@ with tempfile.TemporaryDirectory() as directory:
         assert events[-1] == ('update_check_result', {'trigger': 'automatic', 'result': 'current'})
     assert 'private' not in str(events) and 'qa-action' not in str(events)
     print('Windows analytics: actions, failures, navigation, search deduplication, review and update results passed.')
+
+    # Let workers finish before dispatching queued callbacks, as a busy UI can do.
+    main_thread = threading.get_ident()
+    callbacks = []
+    def received(result, error):
+        callbacks.append((result, error, threading.get_ident()))
+    pool = QThreadPool.globalInstance()
+    for _ in range(100):
+        pool.start(Task(threading.get_ident, received))
+    assert pool.waitForDone(5000), 'Background tasks did not finish'
+    app.processEvents()
+    assert len(callbacks) == 100, f'Lost queued callbacks: {len(callbacks)}/100'
+    assert all(worker != main_thread and receiver == main_thread and error is None
+               for worker, error, receiver in callbacks), 'Task callback ran outside the UI thread'
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    assert not app.findChildren(Signals), 'Finished task receivers leaked'
+    print('Windows tasks: all 100 queued callbacks reached the UI thread and receivers were released.')

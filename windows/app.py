@@ -10,7 +10,7 @@ from urllib.request import Request, urlopen
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from PySide6.QtCore import QLockFile, QObject, QRunnable, QSettings, Qt, QThreadPool, QTimer, QUrl, Signal
+from PySide6.QtCore import QLockFile, QObject, QRunnable, QSettings, Qt, QThreadPool, QTimer, QUrl, Signal, Slot
 from PySide6.QtGui import QAction, QColor, QDesktopServices, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QLineEdit, QMenu, QPushButton,
                               QScrollArea, QSystemTrayIcon, QTabBar, QVBoxLayout, QWidget)
@@ -70,13 +70,25 @@ class Spinner(QWidget):
 class Signals(QObject):
     done = Signal(object, object)
 
+    def __init__(self, callback):
+        # Keep the receiver alive after QRunnable auto-deletion, until UI delivery.
+        super().__init__(QApplication.instance())
+        self.callback = callback
+        self.done.connect(self.deliver)
+
+    @Slot(object, object)
+    def deliver(self, result, error):
+        try:
+            self.callback(result, error)
+        finally:
+            self.deleteLater()
+
 
 class Task(QRunnable):
     def __init__(self, work, callback):
         super().__init__()
         self.work = work
-        self.signals = Signals()
-        self.signals.done.connect(callback)
+        self.signals = Signals(callback)
 
     def run(self):
         try:

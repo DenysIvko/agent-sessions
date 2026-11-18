@@ -5,6 +5,7 @@ Agent Sessions 0.3.0 adds anonymous product analytics with PostHog.
 - Coverage includes failed actions, separate source archive outcomes, source-read health changes, manual review, tutorial steps, fixed filter choices and update-check results. macOS notification opens share the regular session-open tracking path.
 - Session contents, titles, IDs, project names, paths, search text and credentials stay out of analytics. There is no session recording or automatic interaction capture.
 - The preference persists across restarts and upgrades. Disabling it discards queued events; an upload already in progress may finish.
+- Windows background-task results stay alive until their UI callbacks are delivered, avoiding lost poll, action and analytics callbacks.
 
 Existing favorites, archives and review state are preserved. Demo mode and unconfigured builds send no usage events.
 
