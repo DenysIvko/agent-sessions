@@ -21,6 +21,14 @@ with tempfile.TemporaryDirectory() as directory:
         view = TrayWindow(app, snapshot())
     assert view.tabs.currentIndex() == 0
     assert view.tabs.count() == 3
+    with patch('windows.app.QDesktopServices.openUrl') as open_url:
+        help_button = next(b for b in view.findChildren(QPushButton) if b.text() == 'Help')
+        help_button.click()
+        assert open_url.call_args.args[0].toString().endswith('/?tutorial=1')
+        assert not view.isVisible()
+        tour_action = next(a for a in view.tray.contextMenu().actions() if a.text() == 'Quick Tour')
+        tour_action.trigger()
+        assert open_url.call_count == 2
     for index, label in enumerate(['New', 'All', 'Favorites']):
         view.tabs.setCurrentIndex(index)
         assert view.tabs.tabText(index).startswith(label)

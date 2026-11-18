@@ -146,17 +146,19 @@ class SessionsTest(unittest.TestCase):
             with urlopen(base + '/api/sessions') as response:
                 self.assertEqual(json.load(response)['sessions'], [])
                 self.assertEqual(response.headers['Cache-Control'], 'no-store')
-            for path in ['/', '/app.js', '/styles.css', '/sessions.mjs', '/colors.mjs',
+            for path in ['/', '/?tutorial=1', '/app.js', '/styles.css', '/sessions.mjs', '/colors.mjs', '/tutorial.mjs',
                          '/vendor/color-hash-2.0.2/color-hash.mjs']:
                 with urlopen(base + path) as response:
                     self.assertEqual(response.status, 200)
                     self.assertGreater(len(response.read()), 0)
                     self.assertIn("default-src 'self'", response.headers['Content-Security-Policy'])
             navigation = {'Sec-Fetch-Site': 'cross-site', 'Sec-Fetch-Mode': 'navigate', 'Sec-Fetch-Dest': 'document'}
-            with urlopen(Request(base + '/', headers=navigation)) as response:
-                self.assertEqual(response.status, 200)
+            for path in ['/', '/?tutorial=1']:
+                with urlopen(Request(base + path, headers=navigation)) as response:
+                    self.assertEqual(response.status, 200)
             for path, headers, status in [
                 ('/api/sessions', navigation, 403),
+                ('/api/sessions?tutorial=1', navigation, 403),
                 ('/api/sessions', {'Host': 'attacker.example'}, 403),
                 ('/api/sessions', {'Origin': 'https://attacker.example'}, 403),
                 ('/api/sessions', {'Sec-Fetch-Site': 'cross-site'}, 403),

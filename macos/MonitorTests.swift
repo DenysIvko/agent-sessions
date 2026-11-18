@@ -136,15 +136,22 @@ enum MonitorTests {
         var views = [tray.view]
         var tabs: NSSegmentedControl?
         var table: NSTableView?
+        var helpButton: NSButton?
         while !views.isEmpty {
             let view = views.removeLast()
             if let control = view as? NSSegmentedControl, control.accessibilityLabel() == "Session view" { tabs = control }
             if let control = view as? NSTableView { table = control }
+            if let button = view as? NSButton, button.title == "Help" { helpButton = button }
             expect(view.accessibilityLabel() != "Session source" && view.accessibilityLabel() != "Session status",
                    "the redundant source and status filter row is removed")
             views.append(contentsOf: view.subviews)
         }
         expect(tabs?.segmentCount == 3, "New, All and Favorites tabs are accessible")
+        var helpOpened = false
+        tray.onHelp = { helpOpened = true }
+        expect(helpButton != nil, "the tray exposes Help")
+        helpButton!.performClick(nil)
+        expect(helpOpened, "Help opens the tutorial callback")
         tabs!.selectedSegment = 1
         expect(NSApp.sendAction(tabs!.action!, to: tabs!.target, from: tabs), "All is connected to its handler")
         expect(tray.selectedView == "All" && tray.rowCount == 3, "All includes running sessions and older favorites")

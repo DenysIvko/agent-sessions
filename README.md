@@ -8,6 +8,25 @@ and get a notification when an agent finishes.
 [Website](https://denysivko.github.io/agent-sessions/) ·
 [Report an issue](https://github.com/DenysIvko/agent-sessions/issues)
 
+## Install with your coding agent
+
+Copy this prompt into a coding agent that can use your computer, such as Codex or
+Claude Code. It will find the right installer and help you finish setup.
+
+```text
+Install Agent Sessions from https://github.com/DenysIvko/agent-sessions.
+Detect my operating system and CPU architecture, then download the matching
+installer from the latest GitHub release, along with SHA256SUMS.txt.
+Verify the installer's SHA-256 before running it. Use the packaged installer;
+do not build from source or install Python. Preserve any existing Agent Sessions
+settings and data. Help me complete installation, launch the app, and open its
+menu bar/system tray panel and web dashboard. These are unsigned preview builds:
+if the OS blocks installation, explain the warning and let me handle it rather
+than disabling security protections. Tell me if my platform is unsupported.
+```
+
+Prefer to install it yourself? Follow the [download and installation steps](#install).
+
 ![Agent Sessions dashboard with fictional demo sessions](site/assets/dashboard.jpg)
 
 ## What you get
@@ -41,6 +60,19 @@ with their own certificate or wait for signed releases.
 Launch the app, allow notifications if wanted, and click its menu bar or tray icon.
 **Open Web Dashboard** opens the larger interface at `http://127.0.0.1:4318`.
 The app does not add itself to startup automatically.
+
+## Learn the interface
+
+The web dashboard opens a short tour on your first visit. It explains status tiles,
+filters, card labels and colors, opening sessions, favorites, archiving, tray tabs,
+notifications, and updates. Close it at any time; your sessions are never changed
+by the tour.
+
+Use **Help** in the dashboard or either desktop tray to replay it. You can also
+right-click the tray icon and choose **Quick Tour**. Hover the main controls for
+short hints. The guide is bundled with the app and works without an internet connection.
+
+![First-visit tutorial over the dashboard with fictional demo sessions](site/assets/tutorial.jpg)
 
 ## Sources and behavior
 
