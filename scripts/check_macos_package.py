@@ -33,7 +33,8 @@ with tempfile.TemporaryDirectory() as directory:
                 time.sleep(0.1)
         assert data["scope"] == "Demo data" and len(data["sessions"]) == 6
         assert data["version"] == (ROOT / "VERSION").read_text().strip()
-        for path in ("/", "/app.js", "/sessions.mjs", "/styles.css"):
+        assert data["analytics"]["demo"] and not data["analytics"]["configured"]
+        for path in ("/", "/app.js", "/sessions.mjs", "/analytics.mjs", "/styles.css"):
             with urlopen(f"http://127.0.0.1:{port}{path}", timeout=2) as response:
                 assert response.status == 200 and response.read()
         print("Bundled Mac runtime serves fictional sessions and dashboard assets without external Python.")

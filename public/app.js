@@ -1,4 +1,5 @@
 import { identityColors } from './colors.mjs';
+import { track, updateAnalytics } from './analytics.mjs';
 import './tutorial.mjs';
 import { SOURCE_META, STATUS_META, dashboardSessions, projectGroup, sessionStatus, statusCounts, visibleSessions, formatDuration, runDuration } from './sessions.mjs';
 
@@ -12,6 +13,7 @@ let favoritesOnly = false;
 let requestInFlight = false;
 let nextRefresh = Date.now();
 let toastTimer;
+let lastSearch = '';
 const archiving = new Set();
 const savingFavorites = new Set();
 
@@ -301,6 +303,7 @@ async function refresh() {
     const response = await fetch('/api/sessions', { cache: 'no-store', signal: AbortSignal.timeout(5000) });
     if (!response.ok) throw new Error('Could not connect to the local dashboard.');
     data = await response.json();
+    updateAnalytics(data.analytics);
     render();
     setConnection(data.error ? 'Reconnecting' : 'Live', data.error || '');
     $('#updated').textContent = data.checkedAt ? `Updated ${new Date(data.checkedAt * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: data.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone })}` : 'Waiting for first update';
@@ -316,29 +319,35 @@ $('#tiles').addEventListener('click', event => {
   const button = event.target.closest('[data-filter]');
   if (!button) return;
   statusFilter = statusFilter === button.dataset.filter ? 'all' : button.dataset.filter;
+  track('filter_used', { filter: 'status', selection: statusFilter });
   render();
 });
 $('#sources').addEventListener('click', event => {
   const button = event.target.closest('[data-source]');
   if (!button) return;
   sourceFilter = sourceFilter === button.dataset.source ? '' : button.dataset.source;
+  track('filter_used', { filter: 'source', selection: sourceFilter || 'all' });
   render();
 });
 $('#favorites').addEventListener('click', () => {
   favoritesOnly = !favoritesOnly;
+  track('view_selected', { view: favoritesOnly ? 'favorites' : 'all' });
   render();
 });
 $('#projects').addEventListener('click', event => {
   const button = event.target.closest('[data-project]');
   if (!button) return;
   projectFilter = projectFilter === button.dataset.project ? '' : button.dataset.project;
+  track('filter_used', { filter: 'project', selection: projectFilter ? 'selected' : 'cleared' });
   render();
 });
 $('#clear-filters').addEventListener('click', () => {
+  track('filter_used', { filter: 'clear', selection: 'cleared' });
   statusFilter = 'all';
   projectFilter = '';
   sourceFilter = '';
   $('#search').value = '';
+  lastSearch = '';
   $('#kind').value = '';
   render();
   $('#search').focus();
@@ -362,6 +371,7 @@ $('#board').addEventListener('click', async event => {
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Could not save this favorite.');
+      track('favorite_changed', { source: session.source, enabled: result.favorite });
       const updated = { ...session, favorite: result.favorite };
       data.sessions = data.sessions.map(s => s.id === session.id ? updated : s);
       data.favoriteSessions = (data.favoriteSessions || []).filter(s => s.id !== session.id);
@@ -369,6 +379,7 @@ $('#board').addEventListener('click', async event => {
       toast.textContent = result.favorite ? 'Saved to Favorites. It will stay available across days.' : 'Removed from Favorites.';
       await refresh();
     } catch (error) {
+      track('action_failed', { source: session.source, action: 'favorite', reason: error.name === 'TimeoutError' ? 'timeout' : 'request_failed' });
       toast.textContent = error.name === 'TimeoutError' ? 'Favorite was not confirmed. Check the star after the next update.' : error.message;
     } finally {
       savingFavorites.delete(session.id);
@@ -392,9 +403,11 @@ $('#board').addEventListener('click', async event => {
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Could not archive this session.');
+      track('session_archived', { source: session.source });
       toast.textContent = result.message;
       await refresh();
     } catch (error) {
+      track('action_failed', { source: session.source, action: 'archive', reason: error.name === 'TimeoutError' ? 'timeout' : 'request_failed' });
       toast.textContent = error.name === 'TimeoutError' ? 'Local archive was not confirmed. Refresh before retrying.' : error.message;
       $('#action-error span').textContent = `${session.title}: ${toast.textContent}`;
       $('#action-error').hidden = false;
@@ -408,12 +421,15 @@ $('#board').addEventListener('click', async event => {
     return;
   }
   if (!event.target.closest('[data-open]')) return;
+  track('session_open_requested', { source: session.source, method: session.url ? 'link' : 'copy' });
   if (!session.url) {
     event.preventDefault();
     try {
       await navigator.clipboard.writeText(session.resumeCommand);
+      track('session_open_result', { source: session.source, method: 'copy', result: 'copied' });
       toast.textContent = `Resume command copied. Paste it in your terminal to open ${SOURCE_META[session.source].label}.`;
     } catch {
+      track('session_open_result', { source: session.source, method: 'copy', result: 'manual_copy' });
       window.prompt(`Copy this command to resume in ${SOURCE_META[session.source].label}:`, session.resumeCommand);
       toast.textContent = 'Paste the resume command in your terminal.';
     }
@@ -431,14 +447,22 @@ $('#board').addEventListener('keydown', event => {
   }
 });
 $('#search').addEventListener('input', render);
-$('#kind').addEventListener('change', render);
+function trackSearch() {
+  const query = $('#search').value;
+  if (query !== lastSearch) track('filter_used', { filter: 'search', selection: query ? 'applied' : 'cleared' });
+  lastSearch = query;
+}
+$('#search').addEventListener('blur', trackSearch);
+$('#kind').addEventListener('change', () => { render(); track('filter_used', { filter: 'type', selection: $('#kind').value.toLowerCase() || 'all' }); });
 document.addEventListener('keydown', event => {
-  if (event.key === '/' && !$('#tutorial').open && !['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
+  if (event.key === 'Enter' && document.activeElement === $('#search')) trackSearch();
+  if (event.key === '/' && !document.querySelector('dialog[open]') && !['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
     event.preventDefault();
     $('#search').focus();
   }
   if (event.key === 'Escape' && document.activeElement === $('#search')) {
     $('#search').value = '';
+    trackSearch();
     render();
     $('#search').blur();
   }
@@ -447,3 +471,4 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) refr
 setInterval(() => { if (Date.now() >= nextRefresh) refresh(); }, 250);
 setInterval(updateCountdown, 250);
 refresh();
+track('dashboard_opened');

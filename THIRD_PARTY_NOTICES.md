@@ -10,6 +10,12 @@ licenses. No affiliation with OpenAI, Anthropic, Google, Microsoft, or Apple is 
 | psutil | BSD 3-Clause | https://github.com/giampaolo/psutil |
 | tzlocal | MIT | https://github.com/regebro/tzlocal |
 | tzdata | Apache 2.0; IANA data is public domain | https://github.com/python/tzdata |
+| PostHog Python SDK | MIT | https://github.com/PostHog/posthog-python |
+| Requests, distro | Apache 2.0 | https://github.com/psf/requests, https://github.com/python-distro/distro |
+| urllib3, charset-normalizer | MIT | https://github.com/urllib3/urllib3, https://github.com/jawah/charset_normalizer |
+| idna | BSD 3-Clause | https://github.com/kjd/idna |
+| typing-extensions | PSF License | https://github.com/python/typing_extensions |
+| certifi | MPL 2.0 | https://github.com/certifi/python-certifi |
 | Qt / PySide6 / Shiboken6 (Windows) | LGPL 3.0 and applicable Qt module notices | https://code.qt.io/pyside/pyside-setup.git/ |
 | PyInstaller bootloader | GPL 2.0 with distribution exception | https://github.com/pyinstaller/pyinstaller |
 

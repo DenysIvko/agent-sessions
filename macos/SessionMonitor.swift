@@ -57,11 +57,17 @@ struct DashboardSnapshot: Decodable {
     let sourceErrors: [String: String]?
     let error: String?
     var favoriteSessions: [AgentSession]? = nil
+    var analytics: AnalyticsPreference? = nil
 
     var sessionsIncludingFavorites: [AgentSession] {
         var seen = Set<String>()
         return (sessions + (favoriteSessions ?? [])).filter { seen.insert($0.id).inserted }
     }
+}
+
+struct AnalyticsPreference: Decodable {
+    let configured: Bool
+    let enabled: Bool
 }
 
 struct SessionReviews: Codable, Equatable {

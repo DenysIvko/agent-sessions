@@ -51,11 +51,12 @@ class UpdateChecker:
                 request = Request(API_URL, headers={"Accept": "application/vnd.github+json", "User-Agent": f"Agent-Sessions/{VERSION}"})
                 with urlopen(request, timeout=8) as response:
                     release = json.loads(response.read(2 * 1024 * 1024))
-                self.result = release_update(release)
+                self.result = {**release_update(release), "checkStatus": "ok"}
                 self.checked_at = time.time()
             except (OSError, ValueError, TypeError):
                 # A missing first release, offline GitHub, or a rate limit never blocks session tracking.
                 self.checked_at = time.time() - 5 * 60 * 60
+                self.result = {**self.result, "checkStatus": "failed"}
             return self.result
 
 

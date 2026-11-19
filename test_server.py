@@ -9,6 +9,7 @@ import unittest
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
+from product_analytics import Analytics
 from server import Handler, Snapshot, ThreadingHTTPServer, TIMEZONE, read_sessions
 
 
@@ -137,6 +138,7 @@ class SessionsTest(unittest.TestCase):
 
     def test_loopback_api_rejects_cross_origin_and_arbitrary_files(self):
         server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+        server.analytics = Analytics(demo=True)
         server.snapshot = Snapshot()
         server.snapshot.data = {'sessions': [], 'checkedAt': 123}
         worker = threading.Thread(target=server.serve_forever, daemon=True)

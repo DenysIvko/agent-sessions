@@ -21,6 +21,7 @@ from antigravity_sessions import read_sessions as read_antigravity_sessions
 from claude_sessions import ClaudeSessions
 from session_actions import archive_session
 from updates import checker as update_checker
+from product_analytics import Analytics
 
 ROOT = Path(__file__).resolve().parent
 CODEX = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex"))
@@ -182,7 +183,9 @@ def read_sessions(codex=CODEX, loaded_ids=None, now=None, include_ids=()):
 
 
 class Snapshot:
-    def __init__(self, favorites_path=FAVORITES_PATH):
+    def __init__(self, favorites_path=FAVORITES_PATH, analytics=None):
+        self.analytics = analytics
+        self.source_status = {}
         self.lock = threading.Lock()
         self.refresh_lock = threading.RLock()
         self.archive_lock = threading.Lock()
@@ -220,13 +223,18 @@ class Snapshot:
         ):
             try:
                 sessions = reader()
+                status = "data" if sessions else "empty"
             except (OSError, ValueError, sqlite3.Error, subprocess.SubprocessError, RuntimeError) as error:
+                status = "error"
                 print(f"{label} session read failed: {error}", flush=True)
                 saved = {s["id"]: s for s in previous["sessions"] + previous.get("favoriteSessions", [])}
                 sessions = [s for s in saved.values() if s.get("source", "codex") == source]
                 message = f"{label} unavailable. Showing its last successful update."
                 errors.append(message)
                 data["sourceErrors"][source] = message
+            if self.source_status.get(source) != status:
+                self.track("source_status_changed", source=source, status=status)
+                self.source_status[source] = status
             for session in sessions:
                 if self.archived & {session["id"], *session.get("relatedIds", [])}:
                     continue
@@ -285,7 +293,14 @@ class Snapshot:
                           if not archived & {s["id"], *s.get("relatedIds", [])}]
                     for key in ("sessions", "favoriteSessions")}}
         # Hiding active work must not stop it; source failures never undo the local archive.
-        if session["source"] in ("codex", "claude") and not session.get("running") and not session.get("agents") and session["source"] not in source_errors:
+        source = session["source"]
+        if source not in ("codex", "claude"):
+            self.track("source_archive_result", source=source, result="unsupported")
+        elif session.get("running") or session.get("agents"):
+            self.track("source_archive_result", source=source, result="skipped_running")
+        elif source in source_errors:
+            self.track("source_archive_result", source=source, result="skipped_unavailable")
+        else:
             threading.Thread(target=self._archive_in_source, args=(session,), daemon=True).start()
 
     def _archive_in_source(self, session):
@@ -293,8 +308,14 @@ class Snapshot:
         with self.archive_lock:
             try:
                 archive_session(session)
+                self.track("source_archive_result", source=session["source"], result="completed")
             except (ValueError, RuntimeError, OSError, subprocess.SubprocessError) as error:
+                self.track("source_archive_result", source=session["source"], result="failed")
                 print(f"Source archive failed; session remains hidden locally: {error}", flush=True)
+
+    def track(self, event, **properties):
+        if self.analytics is not None:
+            self.analytics.capture(event, {"surface": "backend", **properties})
 
     def refresh(self):
         while True:
@@ -322,7 +343,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if not self.allowed_request():
             return
-        if self.path not in ("/api/archive", "/api/favorite"):
+        if self.path not in ("/api/archive", "/api/favorite", "/api/analytics", "/api/analytics/preferences"):
             self.send_error(404)
             return
         # A custom header and JSON content type prevent cross-site form submissions.
@@ -335,7 +356,16 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("Invalid request size.")
             self.connection.settimeout(3)
             payload = json.loads(self.rfile.read(length))
-            if not isinstance(payload, dict) or not isinstance(payload.get("id"), str):
+            if not isinstance(payload, dict):
+                raise ValueError("A JSON object is required.")
+            if self.path == "/api/analytics/preferences":
+                self.send_json(200, self.server.analytics.set_enabled(payload.get("enabled")))
+                return
+            if self.path == "/api/analytics":
+                self.server.analytics.capture(payload.get("event"), payload.get("properties"))
+                self.send_json(200, {"ok": True})
+                return
+            if not isinstance(payload.get("id"), str):
                 raise ValueError("A session ID is required.")
             snapshot = self.server.snapshot
             if self.path == "/api/favorite":
@@ -362,14 +392,17 @@ class Handler(BaseHTTPRequestHandler):
         if not self.allowed_request():
             return
         path = urlsplit(self.path).path
+        if path == "/api/analytics":
+            self.send_json(200, self.server.analytics.status())
+            return
         if path == "/api/update":
             self.send_json(200, update_checker.check())
             return
         if path == "/api/sessions":
             with self.server.snapshot.lock:
-                body = json.dumps(self.server.snapshot.data).encode()
+                body = json.dumps({**self.server.snapshot.data, "analytics": self.server.analytics.status()}).encode()
             content_type = "application/json"
-        elif path in ("/", "/app.js", "/styles.css", "/favicon.svg", "/colors.mjs", "/sessions.mjs", "/tutorial.mjs",
+        elif path in ("/", "/app.js", "/styles.css", "/favicon.svg", "/colors.mjs", "/sessions.mjs", "/tutorial.mjs", "/analytics.mjs",
                       "/vendor/color-hash-2.0.2/color-hash.mjs"):
             file = ROOT / "public" / ("index.html" if path == "/" else path[1:])
             body = file.read_bytes()
@@ -398,6 +431,7 @@ def main():
     parser.add_argument("--demo", action="store_true", help="Show fictional screenshot data without reading source apps")
     args = parser.parse_args()
     server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
+    server.analytics = Analytics(demo=args.demo)
     if args.demo:
         from demo import snapshot
         server.snapshot = Snapshot()
@@ -407,7 +441,7 @@ def main():
         server.snapshot.archive = read_only
         server.snapshot.set_favorite = read_only
     else:
-        server.snapshot = Snapshot()
+        server.snapshot = Snapshot(analytics=server.analytics)
         threading.Thread(target=server.snapshot.refresh, daemon=True).start()
     url = f"http://127.0.0.1:{args.port}"
     print(f"Agent Sessions {VERSION} is running at {url}\nPress Ctrl+C to stop.", flush=True)
@@ -419,6 +453,7 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
+        server.analytics.close()
         server.server_close()
 
 

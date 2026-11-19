@@ -10,7 +10,7 @@ from urllib.request import Request, urlopen
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from PySide6.QtCore import QLockFile, QObject, QRunnable, QSettings, Qt, QThreadPool, QTimer, QUrl, Signal
+from PySide6.QtCore import QLockFile, QObject, QRunnable, QSettings, Qt, QThreadPool, QTimer, QUrl, Signal, Slot
 from PySide6.QtGui import QAction, QColor, QDesktopServices, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QLineEdit, QMenu, QPushButton,
                               QScrollArea, QSystemTrayIcon, QTabBar, QVBoxLayout, QWidget)
@@ -19,6 +19,7 @@ from app_config import DATA_DIR, VERSION
 from server import Handler, Snapshot, ThreadingHTTPServer
 from session_monitor import OUTCOMES, SessionMonitor, all_sessions
 from updates import checker
+from product_analytics import Analytics
 
 BASE = "http://127.0.0.1:4318"
 SOURCES = {"codex": "Codex", "claude": "Claude Code", "antigravity": "Antigravity"}
@@ -69,13 +70,25 @@ class Spinner(QWidget):
 class Signals(QObject):
     done = Signal(object, object)
 
+    def __init__(self, callback):
+        # Keep the receiver alive after QRunnable auto-deletion, until UI delivery.
+        super().__init__(QApplication.instance())
+        self.callback = callback
+        self.done.connect(self.deliver)
+
+    @Slot(object, object)
+    def deliver(self, result, error):
+        try:
+            self.callback(result, error)
+        finally:
+            self.deleteLater()
+
 
 class Task(QRunnable):
     def __init__(self, work, callback):
         super().__init__()
         self.work = work
-        self.signals = Signals()
-        self.signals.done.connect(callback)
+        self.signals = Signals(callback)
 
     def run(self):
         try:
@@ -109,6 +122,8 @@ class TrayWindow(QWidget):
         self.inflight = False
         self.pending_actions = set()
         self.update_info = None
+        self.analytics_available = False
+        self.opened_tracked = False
         self.setWindowTitle("Agent Sessions")
         self.resize(470, 610)
         self.setStyleSheet("""
@@ -128,7 +143,7 @@ class TrayWindow(QWidget):
         header.addStretch()
         web = QPushButton("Open Web Dashboard")
         web.setToolTip("Open the full dashboard with source, project and status filters")
-        web.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(BASE)))
+        web.clicked.connect(self.open_dashboard)
         header.addWidget(web)
         layout.addLayout(header)
         self.summary = QLabel("Connecting...")
@@ -141,12 +156,15 @@ class TrayWindow(QWidget):
         self.tabs.setExpanding(True)
         self.tabs.setAccessibleName("Session view")
         self.tabs.currentChanged.connect(self.render)
+        self.tabs.tabBarClicked.connect(lambda index: self.track('view_selected', view=('new', 'all', 'favorites')[index]))
         layout.addWidget(self.tabs)
         self.search = QLineEdit()
         self.search.setPlaceholderText("Search sessions")
         self.search.setAccessibleName("Search sessions")
         self.search.setToolTip("Search the selected tab by title, project, source, branch or ID")
         self.search.textChanged.connect(self.render)
+        self.last_search = ''
+        self.search.editingFinished.connect(self.search_finished)
         layout.addWidget(self.search)
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
@@ -163,15 +181,16 @@ class TrayWindow(QWidget):
         self.tray = QSystemTrayIcon(icon(), self)
         self.tray.setToolTip("Agent Sessions")
         self.tray.activated.connect(self.activated)
-        self.tray.messageClicked.connect(self.show_new)
+        self.tray.messageClicked.connect(self.notification_clicked)
         menu = QMenu()
         menu.addAction("Show Sessions", self.show_new)
-        menu.addAction("Open Web Dashboard", lambda: QDesktopServices.openUrl(QUrl(BASE)))
+        menu.addAction("Open Web Dashboard", self.open_dashboard)
         menu.addAction("Quick Tour", self.open_tutorial)
+        menu.addAction("Usage Analytics...", self.open_privacy)
         notifications = QAction("Completion notifications", menu)
         notifications.setCheckable(True)
         notifications.setChecked(self.settings.value("notifications", True, bool))
-        notifications.toggled.connect(lambda enabled: self.settings.setValue("notifications", enabled))
+        notifications.toggled.connect(self.toggle_notifications)
         menu.addAction(notifications)
         self.update_action = menu.addAction("Check for Updates", self.update_menu_clicked)
         menu.addAction(f"Version {VERSION}").setEnabled(False)
@@ -197,8 +216,10 @@ class TrayWindow(QWidget):
             self.hide() if self.isVisible() else self.show_new()
 
     def show_new(self):
+        self.track('tray_opened')
         self.tabs.setCurrentIndex(0)
         self.search.clear()
+        self.last_search = ''
         area = self.app.primaryScreen().availableGeometry()
         self.resize(min(470, area.width()), min(610, area.height()))
         self.move(area.right() - self.width(), area.bottom() - self.height())
@@ -219,6 +240,10 @@ class TrayWindow(QWidget):
         if self.footer.text() in (RECONNECT_STATUS, self.snapshot.get("error")):
             self.footer.setText(POLL_STATUS)
         self.snapshot = data
+        self.analytics_available = data.get('analytics', {}).get('configured', False)
+        if not self.opened_tracked:
+            self.track('app_opened')
+            self.opened_tracked = True
         finished = self.monitor.update(data)
         self.save_reviews()
         scrollbar = self.scroll.verticalScrollBar()
@@ -227,6 +252,7 @@ class TrayWindow(QWidget):
         scrollbar.setValue(position)
         if self.settings.value("notifications", True, bool):
             for session in finished:
+                self.track('notification_requested', kind='completion')
                 self.tray.showMessage(f"{SOURCES[session['source']]} {OUTCOMES[session['status']]}",
                                       f"{session['project']}\n{session['title']}", QSystemTrayIcon.MessageIcon.Information, 6000)
 
@@ -298,43 +324,96 @@ class TrayWindow(QWidget):
             payload['favorite'] = not session.get('favorite')
         def done(data, error):
             self.pending_actions.discard(session['id'])
+            if not error:
+                if endpoint == '/api/favorite':
+                    self.track('favorite_changed', source=session['source'], enabled=payload['favorite'])
+                else:
+                    self.track('session_archived', source=session['source'])
+            else:
+                self.track('action_failed', source=session['source'],
+                           action='favorite' if endpoint == '/api/favorite' else 'archive', reason='request_failed')
             self.footer.setText(error or ("Archived in Agent Sessions" if endpoint == '/api/archive' else "Favorite saved"))
             self.poll()
         QThreadPool.globalInstance().start(Task(lambda: request(endpoint, payload), done))
 
     def open_session(self, session):
         url = session.get('url') or ''
+        method = 'open'
         if url.startswith(('codex://threads/', 'claude://epitaxy/', 'claude://resume?session=')):
-            if not QDesktopServices.openUrl(QUrl(url)):
+            self.track('session_open_requested', source=session['source'], method='link')
+            opened = QDesktopServices.openUrl(QUrl(url))
+            self.track('session_open_result', source=session['source'], method='link', result='accepted' if opened else 'failed')
+            if not opened:
                 self.footer.setText(f"Install {SOURCES[session['source']]} to open this session")
                 return
         elif session.get('resumeCommand'):
+            method = 'copy'
+            self.track('session_open_requested', source=session['source'], method='copy')
             self.app.clipboard().setText(session['resumeCommand'])
+            self.track('session_open_result', source=session['source'], method='copy', result='copied')
             self.footer.setText("Resume command copied. Paste it in your terminal.")
         else:
+            self.track('session_open_result', source=session['source'], method='link', result='unavailable')
             return
         self.monitor.mark_reviewed(session)
         self.save_reviews()
+        self.track('session_reviewed', source=session['source'], method=method)
         self.render()
 
+    def search_finished(self):
+        query = self.search.text()
+        if query != self.last_search:
+            self.track('filter_used', filter='search', selection='applied' if query else 'cleared')
+            self.last_search = query
+
+    def open_dashboard(self):
+        self.track('navigation_requested', destination='dashboard')
+        QDesktopServices.openUrl(QUrl(BASE))
+
     def open_tutorial(self):
+        self.track('navigation_requested', destination='tutorial')
         QDesktopServices.openUrl(QUrl(BASE + '/?tutorial=1'))
         self.hide()
 
+    def open_privacy(self):
+        self.track('navigation_requested', destination='privacy')
+        QDesktopServices.openUrl(QUrl(BASE + '/?privacy=1'))
+        self.hide()
+
+    def track(self, event, **properties):
+        if self.analytics_available:
+            payload = {'event': event, 'properties': {'surface': 'tray', **properties}}
+            QThreadPool.globalInstance().start(Task(lambda: request('/api/analytics', payload), lambda *_: None))
+
+    def toggle_notifications(self, enabled):
+        self.settings.setValue('notifications', enabled)
+        self.track('notifications_toggled', enabled=enabled)
+
+    def notification_clicked(self):
+        self.track('notification_clicked')
+        self.show_new()
+
     def update_menu_clicked(self):
         if self.update_info:
+            self.track('update_download_requested')
             QDesktopServices.openUrl(QUrl(self.update_info['downloadURL']))
         else:
-            self.check_updates()
+            self.check_updates(manual=True)
 
-    def check_updates(self):
+    def check_updates(self, manual=False):
         if self.update_info:
             return
+        trigger = 'manual' if manual else 'automatic'
+        self.track('update_check_requested', trigger=trigger)
         def done(data, error):
+            result = 'failed' if error or not data or data.get('checkStatus') == 'failed' else 'available' if data.get('available') else 'current'
+            self.track('update_check_result', trigger=trigger, result=result)
             if data and data.get('available'):
+                self.track('update_available')
                 self.update_info = data
                 self.update_action.setText(f"Download Update {data['version']}")
                 if self.settings.value('notifiedVersion') != data['version']:
+                    self.track('notification_requested', kind='update')
                     self.tray.showMessage("Agent Sessions update available",
                                           f"Version {data['version']} is ready. Open the tray menu to download.")
                     self.settings.setValue('notifiedVersion', data['version'])
@@ -351,7 +430,8 @@ def main():
     server = None
     try:
         server = ThreadingHTTPServer(('127.0.0.1', 4318), Handler)
-        server.snapshot = Snapshot()
+        server.analytics = Analytics()
+        server.snapshot = Snapshot(analytics=server.analytics)
         threading.Thread(target=server.snapshot.refresh, daemon=True).start()
         threading.Thread(target=server.serve_forever, daemon=True).start()
     except OSError:
@@ -361,6 +441,7 @@ def main():
     window.start()
     app.exec()
     if server:
+        server.analytics.close()
         server.shutdown()
         server.server_close()
 

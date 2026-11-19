@@ -4,15 +4,17 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+import threading
 from unittest.mock import patch
 
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from PySide6.QtCore import QSettings
+from PySide6.QtCore import QCoreApplication, QEvent, QSettings, QThreadPool
 from PySide6.QtWidgets import QApplication, QPushButton, QWidget
 from demo import snapshot
-from windows.app import POLL_STATUS, RECONNECT_STATUS, TrayWindow
+from product_analytics import validate_event
+from windows.app import POLL_STATUS, RECONNECT_STATUS, Signals, Task, TrayWindow
 
 app = QApplication.instance() or QApplication([])
 with tempfile.TemporaryDirectory() as directory:
@@ -29,6 +31,18 @@ with tempfile.TemporaryDirectory() as directory:
         tour_action = next(a for a in view.tray.contextMenu().actions() if a.text() == 'Quick Tour')
         tour_action.trigger()
         assert open_url.call_count == 2
+        privacy_action = next(a for a in view.tray.contextMenu().actions() if a.text() == 'Usage Analytics...')
+        privacy_action.trigger()
+        assert open_url.call_args.args[0].toString().endswith('/?privacy=1')
+        assert not view.isVisible()
+    with patch.object(view, 'track') as track:
+        view.tabs.tabBarClicked.emit(2)
+        track.assert_called_once_with('view_selected', view='favorites')
+        track.reset_mock()
+        notifications = next(a for a in view.tray.contextMenu().actions() if a.text() == 'Completion notifications')
+        notifications.trigger()
+        track.assert_called_once_with('notifications_toggled', enabled=False)
+        notifications.trigger()
     for index, label in enumerate(['New', 'All', 'Favorites']):
         view.tabs.setCurrentIndex(index)
         assert view.tabs.tabText(index).startswith(label)
@@ -110,3 +124,66 @@ with tempfile.TemporaryDirectory() as directory:
     assert view.footer.text() == POLL_STATUS
     view.hide()
     print('Windows tray: notifications, explicit update link, reconnect status and scroll passed.')
+
+    events = []
+    def capture(event, **properties):
+        validate_event(event, {'surface': 'tray', **properties})
+        events.append((event, properties))
+    session = {**completed, 'id': 'qa-action', 'source': 'codex', 'url': 'codex://threads/qa-action'}
+    with (patch.object(view, 'track', side_effect=capture), patch.object(view, 'poll'),
+          patch('windows.app.QThreadPool') as pool, patch('windows.app.request', return_value={}) as request,
+          patch('windows.app.QDesktopServices.openUrl', return_value=False) as open_url):
+        pool.globalInstance.return_value.start.side_effect = lambda task: task.run()
+        view.open_dashboard()
+        view.open_tutorial()
+        view.open_privacy()
+        view.search.setText('private project and search')
+        view.search_finished()
+        view.search_finished()
+        view.search.clear()
+        view.search_finished()
+        assert len([e for e in events if e[0] == 'filter_used']) == 2
+        view.open_session(session)
+        assert events[-1] == ('session_open_result', {'source': 'codex', 'method': 'link', 'result': 'failed'})
+        open_url.return_value = True
+        view.open_session(session)
+        assert events[-1] == ('session_reviewed', {'source': 'codex', 'method': 'open'})
+        view.open_session({**session, 'url': None, 'resumeCommand': 'qa-only-placeholder'})
+        assert events[-2] == ('session_open_result', {'source': 'codex', 'method': 'copy', 'result': 'copied'})
+        view.open_session({**session, 'url': None, 'resumeCommand': None})
+        assert events[-1][1]['result'] == 'unavailable'
+        view.action(session, '/api/favorite')
+        assert events[-1][0] == 'favorite_changed'
+        view.action(session, '/api/archive')
+        assert events[-1][0] == 'session_archived'
+        request.side_effect = OSError('private path and credentials')
+        for endpoint, action in [('/api/favorite', 'favorite'), ('/api/archive', 'archive')]:
+            view.action(session, endpoint)
+            assert events[-1] == ('action_failed', {'source': 'codex', 'action': action, 'reason': 'request_failed'})
+        view.update_info = None
+        with patch('windows.app.checker.check', return_value={'available': False, 'checkStatus': 'failed'}):
+            view.update_menu_clicked()
+        assert events[-2:] == [('update_check_requested', {'trigger': 'manual'}),
+                              ('update_check_result', {'trigger': 'manual', 'result': 'failed'})]
+        with patch('windows.app.checker.check', return_value={'available': False, 'checkStatus': 'ok'}):
+            view.check_updates()
+        assert events[-1] == ('update_check_result', {'trigger': 'automatic', 'result': 'current'})
+    assert 'private' not in str(events) and 'qa-action' not in str(events)
+    print('Windows analytics: actions, failures, navigation, search deduplication, review and update results passed.')
+
+    # Let workers finish before dispatching queued callbacks, as a busy UI can do.
+    main_thread = threading.get_ident()
+    callbacks = []
+    def received(result, error):
+        callbacks.append((result, error, threading.get_ident()))
+    pool = QThreadPool.globalInstance()
+    for _ in range(100):
+        pool.start(Task(threading.get_ident, received))
+    assert pool.waitForDone(5000), 'Background tasks did not finish'
+    app.processEvents()
+    assert len(callbacks) == 100, f'Lost queued callbacks: {len(callbacks)}/100'
+    assert all(worker != main_thread and receiver == main_thread and error is None
+               for worker, error, receiver in callbacks), 'Task callback ran outside the UI thread'
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    assert not app.findChildren(Signals), 'Finished task receivers leaked'
+    print('Windows tasks: all 100 queued callbacks reached the UI thread and receivers were released.')

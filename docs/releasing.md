@@ -36,6 +36,11 @@ Windows additionally needs `requirements-windows.txt` and Inno Setup 6. Run
 Python is bundled by PyInstaller. No Python installation is required on a target machine.
 CI uses Python 3.13, with exact package versions in the requirements files.
 
+Configure `POSTHOG_PROJECT_KEY` and `POSTHOG_HOST` before packaging official 0.3.0+
+builds. These are injected into ignored client configuration during packaging; only
+the public ingestion token is bundled. Tests and demo mode do not send events, even
+when a token is configured. See [analytics setup](analytics.md).
+
 ## Screenshots
 
 Use `python server.py --demo --port 4319` and capture the actual dashboard.

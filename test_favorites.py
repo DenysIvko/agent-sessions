@@ -7,6 +7,7 @@ from unittest.mock import patch
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
+from product_analytics import Analytics
 from server import Handler, Snapshot, ThreadingHTTPServer, read_session_ids, write_session_ids
 
 
@@ -80,6 +81,7 @@ class FavoritesTest(unittest.TestCase):
     def test_favorite_api_validates_and_shares_state_without_source_actions(self):
         self.refresh()
         server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+        server.analytics = Analytics(demo=True)
         server.snapshot = self.snapshot
         worker = threading.Thread(target=server.serve_forever, daemon=True)
         worker.start()

@@ -8,6 +8,7 @@ from unittest.mock import patch
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
+from product_analytics import Analytics
 from server import Handler, Snapshot, ThreadingHTTPServer, read_session_ids, write_session_ids
 from session_actions import archive_session
 
@@ -43,6 +44,7 @@ class ActionsTest(unittest.TestCase):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+        server.analytics = Analytics(demo=True)
         server.snapshot = Snapshot(Path(directory.name) / 'favorites.json')
         server.snapshot.data = {'sessions': sessions, 'sourceErrors': source_errors or {}}
         worker = threading.Thread(target=server.serve_forever, daemon=True)

@@ -1,11 +1,13 @@
-Agent Sessions 0.2.0 makes installation and learning the interface easier.
+Agent Sessions 0.3.0 adds anonymous product analytics with PostHog.
 
-- Copy a ready-to-use installation prompt from the top of the README into your coding agent.
-- A dismissible first-visit tour explains the dashboard and desktop tray, including filters, session actions, notifications and updates.
-- Replay the tour from Help in the dashboard or either tray, or Quick Tour in the tray menu.
-- Hover the main controls for short hints. Tutorial completion is saved in your browser; session data is unchanged.
+- Usage events are enabled by default. Open Privacy in the dashboard or Usage Analytics in the tray menu to turn them off for this device.
+- Explicit events cover dashboard and tray usage, favorites, archiving, opening sessions, the tutorial, notifications and updates.
+- Coverage includes failed actions, separate source archive outcomes, source-read health changes, manual review, tutorial steps, fixed filter choices and update-check results. macOS notification opens share the regular session-open tracking path.
+- Session contents, titles, IDs, project names, paths, search text and credentials stay out of analytics. There is no session recording or automatic interaction capture.
+- The preference persists across restarts and upgrades. Disabling it discards queued events; an upload already in progress may finish.
+- Windows background-task results stay alive until their UI callbacks are delivered, avoiding lost poll, action and analytics callbacks.
 
-Existing favorites, archives and review state are preserved. The tour is bundled locally and adds no external services or dependencies.
+Existing favorites, archives and review state are preserved. Demo mode and unconfigured builds send no usage events.
 
 These are unsigned preview builds. They are not notarized by Apple or signed with a trusted Windows publisher certificate. OS security warnings may appear. Checksums are provided in SHA256SUMS.txt.
 
