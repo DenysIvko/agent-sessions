@@ -129,6 +129,9 @@ enum MonitorTests {
         _ = NSApplication.shared
         NSApp.setActivationPolicy(.prohibited)
         let tray = TrayViewController()
+        expect(!tray.isViewLoaded, "startup status is read before the tray panel loads")
+        expect(tray.selectedView == "New" && tray.rowCount == 0 && tray.newCount == 0,
+               "notification status can read the default tray state before the first snapshot")
         var viewSnapshot = snapshot(120, [unread, running])
         viewSnapshot.favoriteSessions = [oldClaude]
         tray.update(viewSnapshot, newSessions: [unread, running], notificationState: "Allowed")
