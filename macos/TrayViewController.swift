@@ -161,7 +161,12 @@ final class TrayViewController: NSViewController, NSTableViewDataSource, NSTable
     var onSearch: ((String) -> Void)?
     var onNotifications: ((NSButton) -> Void)?
     private let summary = NSTextField(labelWithString: "Connecting...")
-    private let tabs = NSSegmentedControl(labels: ["New", "All", "Favorites"], trackingMode: .selectOne, target: nil, action: nil)
+    private let tabs: NSSegmentedControl = {
+        let control = NSSegmentedControl(labels: ["New", "All", "Favorites"], trackingMode: .selectOne, target: nil, action: nil)
+        // Startup notification callbacks read this selection before loadView runs.
+        control.selectedSegment = 0
+        return control
+    }()
     private let search = NSSearchField()
     private var lastSearch = ""
     private let table = NSTableView()
@@ -197,7 +202,6 @@ final class TrayViewController: NSViewController, NSTableViewDataSource, NSTable
         header.spacing = 8
         summary.font = .systemFont(ofSize: 11)
         summary.textColor = .secondaryLabelColor
-        tabs.selectedSegment = 0
         tabs.target = self
         tabs.action = #selector(tabChanged)
         tabs.segmentStyle = .rounded

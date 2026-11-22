@@ -1,13 +1,9 @@
-Agent Sessions 0.3.0 adds anonymous product analytics with PostHog.
+Agent Sessions 0.3.1 fixes a macOS startup crash that could make the menu bar icon disappear.
 
-- Usage events are enabled by default. Open Privacy in the dashboard or Usage Analytics in the tray menu to turn them off for this device.
-- Explicit events cover dashboard and tray usage, favorites, archiving, opening sessions, the tutorial, notifications and updates.
-- Coverage includes failed actions, separate source archive outcomes, source-read health changes, manual review, tutorial steps, fixed filter choices and update-check results. macOS notification opens share the regular session-open tracking path.
-- Session contents, titles, IDs, project names, paths, search text and credentials stay out of analytics. There is no session recording or automatic interaction capture.
-- The preference persists across restarts and upgrades. Disabling it discards queued events; an upload already in progress may finish.
-- Windows background-task results stay alive until their UI callbacks are delivered, avoiding lost poll, action and analytics callbacks.
+- The New tab is selected before startup notification callbacks can read the tray state. Previously, a callback arriving before the first dashboard snapshot could read an unselected tab and terminate the app.
+- A native regression test reads the tray status before its panel loads, matching the failing startup order.
 
-Existing favorites, archives and review state are preserved. Demo mode and unconfigured builds send no usage events.
+Existing favorites, archives, review state and analytics preferences are preserved.
 
 These are unsigned preview builds. They are not notarized by Apple or signed with a trusted Windows publisher certificate. OS security warnings may appear. Checksums are provided in SHA256SUMS.txt.
 
